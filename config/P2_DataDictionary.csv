@@ -115,6 +115,7 @@ icc_diag_tumor_grade,icc_diagnosis,,radio,"Tumor Grade  ","1, Well-differentiate
 visit_intro_text,visit,,descriptive,"Please fill this form once at enrollment and then at every subsequent visit.
 
 If this is filled as part of Aim 1 -- Only one visitIf this is filled as part of Aim 2 -- Only one visitIf this is filled as part of Aim 3 -- Multiple visits",,,,,,,,,,,,,
+visit_type,visit,,radio,"Type of follow-up visit","0, Baseline | 1, 12 Months | 2, 24 Months | 3, 36 Months | 5, 48 Months | 6, 60 Months | 88, Unscheduled visit",,,,,,,,,,,,
 visit_d,visit,,text,"Visit date",,,date_ymd,2018-01-01,,,,y,,,,,
 visit_hiv_y,visit,HIV,radio,"Is the patient HIV positive at time of Visit ","1, Yes | 0, No","This question is repeated in every visit form",,,,,,y,RH,,,,
 visit_hiv_text,visit,,descriptive,"If the patient has an HIV diagnosis, please make sure that the HIV diagnosis and visit questions are filled",,,,,,,"[visit_hiv_y] = '1'",,,,,,
