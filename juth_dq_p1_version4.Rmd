@@ -1,0 +1,1007 @@
+---
+title: "Missing Data -Project 1 - Juth"
+author: "Neelima Katam, Kirsten Burdett, BISC"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output: 
+  html_document: 
+    toc: true
+ 
+---
+
+
+<!-------------------      Updates     -------------------->
+<!-- Updated: Kirsten Burdett -->
+<!--          August 25, 2020 -->
+<!--          Added table for completed forms as well as -->
+<!--          figures for missing data analysis   -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+```{r message = FALSE, warning = FALSE}
+library(DT)  #for datatable() 
+library(Hmisc)  #capitalize
+library(kableExtra)
+library(visdat)
+
+
+#source("/Volumes/fsmresfiles/PrevMed/Projects/QDSC/Projects/07 Nigeria U54/Data quality reports/Project1_version4/R scripts/updated_juth_project1_data_quality_version4_KB.R")
+
+
+multi_join <- function(byvar, listdat, joinfun, ...){
+    require("dplyr")
+    output <- Reduce(function(x, y) {joinfun(by=byvar, x, y, ...)}, listdat)
+    return(output)
+}
+
+# Need to do Arm 1 and Arm 2 seperatly 
+# Arm1: 3 Events (Enrollment = c(Enrollment, Hiv Diagnosis, HCC diagnosis), Visit = c(Visit, Laboratory Testing Results, Visit - HCC), Outcome = Outcome)
+# Arm2: 4 events (Enrollment = c(Enrollment, HIV Diagnosis), Visit = c(Visit, Laboratory Testing Results, Visit - HIV), HCC Diagnosis = c(HCC Diagnosis, Visit - HCC), Study End = Outcome)
+
+arm1_dat <- juth_data %>%
+  dplyr::filter(redcap_event_name %in% c("enrollment_arm_1", "visit_arm_1", "outcome_arm_1"))
+
+arm2_dat <- juth_data %>%
+  dplyr::filter(redcap_event_name %in% c("enrollment_arm_2", "visit_arm_2", "hcc_diagnosis_arm_2", "study_end_arm_2"))
+#dim(juth_data); dim(arm1_dat); dim(arm2_dat)
+# table(juth_data$redcap_event_name)
+
+
+
+
+#==========    Arm 1 Events    ==========#
+#==== enroll
+e1raw <- mymetadata$field_name[mymetadata$form_name %in% c("enrollment", "hiv_diagnosis", "hcc_diagnosis")]
+enrollvars1 <- e1raw[e1raw %in% names(arm1_dat)]
+
+enroll_d1 <- arm1_dat %>%
+  dplyr::filter(redcap_event_name == "enrollment_arm_1") %>%
+  dplyr::select(record_id, redcap_event_name, enrollvars1)
+
+#==== visit
+v_raw1 <- mymetadata$field_name[mymetadata$form_name %in% c("visit", "laboratory_testing_results", "visit_hcc")]
+vvars1 <- v_raw1[v_raw1 %in% names(arm1_dat)]
+
+visit_d1 <- arm1_dat %>%
+  dplyr::filter(redcap_event_name == "visit_arm_1") %>%
+  dplyr::select(record_id, vvars1)
+
+#==== outcome
+o_raw1 <- mymetadata$field_name[mymetadata$form_name == "outcome"]
+outcomevars1 <- o_raw1[o_raw1 %in% names(arm1_dat)]
+
+outcome_d1 <- arm1_dat %>%
+  dplyr::filter(redcap_event_name == "outcome_arm_1") %>%
+  dplyr::select(record_id, outcomevars1)
+
+
+arm1_final <- multi_join(byvar = "record_id", list(enroll_d1, visit_d1, outcome_d1), joinfun = full_join)
+#dim(arm1_dat); dim(enroll_d1); dim(visit_d1); dim(outcome_d1); dim(arm1_final)
+
+
+
+
+#==========    Arm 2 Events    ==========#
+#==== enroll
+e2raw <- mymetadata$field_name[mymetadata$form_name %in% c("enrollment", "hiv_diagnosis")]
+enrollvars2 <- e2raw[e2raw %in% names(arm2_dat)]
+
+enroll_d2 <- arm2_dat %>%
+  dplyr::filter(redcap_event_name == "enrollment_arm_2") %>%
+  dplyr::select(record_id, redcap_event_name, enrollvars2)
+
+#==== visit
+v_raw2 <- mymetadata$field_name[mymetadata$form_name %in% c("visit", "laboratory_testing_results", "visit_hiv")]
+vvars2 <- v_raw2[v_raw2 %in% names(arm2_dat)]
+
+visit_d2 <- arm2_dat %>%
+  dplyr::filter(redcap_event_name == "visit_arm_2") %>%
+  dplyr::select(record_id, vvars2)
+
+#==== hcc diagnosis
+hcc_raw2 <- mymetadata$field_name[mymetadata$form_name %in% c("hcc_diagnosis", "visit_hcc")]
+hccvars2 <- hcc_raw2[hcc_raw2 %in% names(arm2_dat)]
+
+hcc_d2 <- arm2_dat %>%
+  dplyr::filter(redcap_event_name == "hcc_diagnosis_arm_2") %>%
+  dplyr::select(record_id, hccvars2)
+
+
+#==== study end
+o_raw2 <- mymetadata$field_name[mymetadata$form_name == "outcome"]
+outcomevars2 <- o_raw2[o_raw2 %in% names(arm2_dat)]
+
+outcome_d2 <- arm2_dat %>%
+  dplyr::filter(redcap_event_name == "study_end_arm_2") %>%
+  dplyr::select(record_id, outcomevars2)
+
+
+arm2_final <- multi_join(byvar = "record_id", list(enroll_d2, visit_d2, hcc_d2, outcome_d2), joinfun = full_join)
+#dim(arm2_dat); dim(enroll_d2); dim(visit_d2); dim(hcc_d2); dim(outcome_d2); dim(arm2_final)
+# HIV+/Fibrosis (n= `r count(u54_id %>% dplyr::filter((u54_id$redcap_event_name == #"enrollment_arm_2") & u54_id$enr_hiv_serology_y == "1" & u54_id$enr_hcc_serology_y == #"0"))`), 
+```
+
+
+<br>
+
+
+* * *
+
+As of the current data pull (`r format(Sys.Date(),'%d %b %Y')`), there are `r length(unique(juth_data$record_id))` subjects in the JUTH Project 1 Clinical REDCap database with `r length(unique(arm1_final$record_id))` in Arm 1 and `r length(unique(arm2_final$record_id))` in Arm 2. 
+The cohorts are defined as follows: HIV-/HCC-(n= `r nrow(u54_id %>% dplyr::filter(u54_id$enr_hiv_serology_y == "0" & u54_id$enr_hcc_serology_y == "0"))`), 
+HIV-/HCC+ (n= `r nrow(u54_id %>% dplyr::filter(u54_id$redcap_event_name == "enrollment_arm_1" & u54_id$enr_hiv_serology_y == "0" & u54_id$enr_hcc_serology_y == "1"))`),
+HIV+/Fibrosis (n= `r nrow(u54_id %>% dplyr::filter((u54_id$redcap_event_name == "enrollment_arm_2")))`), 
+HIV+/HCC- (n= `r nrow(u54_id %>% dplyr::filter(u54_id$redcap_event_name == "enrollment_arm_1" & u54_id$enr_hiv_serology_y == "1" & u54_id$enr_hcc_serology_y == "0"))`), and 
+HIV+/HCC+ (n= `r nrow(u54_id %>% dplyr::filter(u54_id$redcap_event_name == "enrollment_arm_1" & u54_id$enr_hiv_serology_y == "1" & u54_id$enr_hcc_serology_y == "1"))`).
+
+
+<br>
+<br>
+
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+
+
+<!------------------------------------------------------------------------>
+<!---------------               Complete Forms             --------------->
+<!------------------------------------------------------------------------>
+
+## 1.0 Complete Forms
+
+There are `r length(unique(mymetadata$form_name))` forms, which include `r paste(capitalize(unique(mymetadata$form_name)), collapse = ", ")`. The table below describes the number of completed forms in total and by arm.
+
+```{r}
+listforms <- grep("*_complete", names(juth_data), value = TRUE)
+listforms <- listforms[!listforms == "final_completed_d"]  
+
+formfun <- function(dat, formvar, roundval){
+  cleanform <- gsub("_complete", "", formvar)
+  formName <- capitalize(gsub("_", " ",cleanform))
+  
+  Ncomplete <- sum(dat[,formvar] == 2 | dat[,formvar] == "Complete", na.rm=TRUE)
+  subj <- length(unique(dat$record_id))
+  Nperc <- paste0(Ncomplete, " (", round((Ncomplete/subj)*100,roundval) , ")")  #combine to get n(%)
+  
+  outshow <- tibble("Form" = formName, "n (%)" = Nperc)
+
+  return(outshow)
+}
+
+#test <- formfun(juth_data, "visit_complete", 2); test
+
+formshow <- lapply(listforms, function(x) formfun(juth_data, x, 2))   #form totals for all subjects
+allforms <- multi_join(byvar = c("Form", "n (%)"), formshow, joinfun =full_join)
+allforms <- allforms %>% dplyr::rename(!!paste0("Total (n=", length(unique(juth_data$record_id)), ")") := `n (%)`)
+
+arm1show <- lapply(listforms, function(x) formfun(arm1_dat, x, 2))   #form totals for all subjects
+arm1forms <- multi_join(byvar = c("Form", "n (%)"), arm1show, joinfun =full_join)
+arm1forms <- arm1forms %>% dplyr::rename(!!paste0("Arm 1 (n=", length(unique(arm1_dat$record_id)), ")") := `n (%)`)
+
+arm2show <- lapply(listforms, function(x) formfun(arm2_dat, x, 2))   #form totals for all subjects
+arm2forms <- multi_join(byvar = c("Form", "n (%)"), arm2show, joinfun =full_join)
+arm2forms <- arm2forms %>% dplyr::rename(!!paste0("Arm 2 (n=", length(unique(arm2_dat$record_id)), ")") := `n (%)`)
+
+final_forms <- multi_join(byvar = "Form", list(allforms, arm1forms, arm2forms), joinfun= full_join)
+```
+
+
+```{r echo=FALSE}
+kable(final_forms, booktabs = TRUE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  add_header_above(c(" " = 2, "Arm" = 2))
+```
+
+<br>
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+<br>
+
+<!------------------------------------------------------------------------>
+<!---------------              Follow-up visits            --------------->
+<!------------------------------------------------------------------------>
+
+## 2.0 Expected(Calculated) Follow-up visits
+
+**_Table 2.0_**
+```{r echo=FALSE}
+# u54_id_sel <- u54_id %>% select(-enr_hiv_serology_y,-enr_hcc_serology_y,-enr_fibrosis_y)
+# knitr::kable(u54_id_sel, col.names = c("Record_id", "REDCap Event", "Other_ID", #"Enrollment Date","Cohort", "Cohort2", "6 months","12 months","24 months","36 #months"))
+
+kbl(u54_id_sel) %>% kable_paper() %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")
+
+#create excel file output for the sites
+write.csv(alive_u54_id_sel, '~/Documents/neelima/Test/output/juth/calculated_follow_up_alive_dates.csv',row.names = FALSE)
+write.csv(u54_id_sel, '~/Documents/neelima/Test/output/juth/calculated_follow_up_dates.csv',row.names = FALSE)
+```
+<br>
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+<br>
+
+## 3.0 Follow-up visits by Forms and Cohorts
+
+### 3.1 Visit form 
+> **3.1.1 Cohort: HIV+/Fibrosis**    
+> Follow-up events: Baseline, 12 months, 24 months, 36 months
+
++ There are `r nrow(u54_visit_fibrosis)` patients.
++ 6 records highlighted in red color in the table below has their visit date(redcap_baseline) earlier than enrollment date.
+<!-- commented the following rows as we look at visit_type field OR redcap_repeat_instance = 1 -->
+  <!-- + `r sum(!(is.na(u54_visit_fibrosis$redcap_baseline)))` patients have data for baseline visit. -->
+  <!-- + `r sum(!(is.na(u54_visit_fibrosis$redcap_12_months)))` patients have data for 12 month follow-up visit. -->
+  <!-- + `r sum(!(is.na(u54_visit_fibrosis$redcap_24_months)))` patients have data for 24 month follow-up visit. -->
+  <!-- + `r sum(!(is.na(u54_visit_fibrosis$redcap_36_months)))` patients have data for 36 month follow-up visit. -->
++ `r sum(u54_visit_fibrosis_due$months_12_due)` patients are due for 12 month follow-up visit.
++ `r sum(u54_visit_fibrosis_due$months_24_due)` patients are due for 24 month follow-up visit.
++ `r sum(u54_visit_fibrosis_due$months_36_due)` patients are due for 36 month follow-up visit.
+
+*Note: If a calculated follow-up event date falls within the range between enrollment date and the report run date(today()), then a patient is due for that follow-up event.*
+
+**_Table 3.1.1_**
+```{r echo=FALSE}
+kbl(u54_visit_fibrosis) %>% kable_paper() %>% row_spec(c(8,12,28,55,64,77), color = "white", background = "#D7261E") %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+---
+
+> **3.1.2 Cohorts: HIV+/HCC+, HIV-/HCC+**   
+> Follow-up events: Baseline, 6 months, 12 months
+
++ There are `r nrow(u54_visit_hccpos)` patients.
++ 18 records highlighted in red color in the table below has their visit date(redcap_baseline) earlier than enrollment date.
+
+<!-- commented the following rows as we look at visit_type field OR redcap_repeat_instance = 1 -->
+  <!-- + `r sum(!(is.na(u54_visit_hccpos$redcap_baseline)))` patients have data for baseline visit. -->
+  <!-- + `r sum(!(is.na(u54_visit_hccpos$redcap_6_months)))` patients have data for 6 month follow-up visit. -->
+  <!-- + `r sum(!(is.na(u54_visit_hccpos$redcap_12_months)))` patients have data for 12 month follow-up visit. -->
++ `r sum(u54_visit_hccpos_due$months_6_due)` patients are due for 6 month follow-up visit.
++ `r sum(u54_visit_hccpos_due$months_12_due)` patients are due for 12 month follow-up visit.
+ 
+<!-- \n -->
+<!-- ##### Follow-up events: Baseline, 6 months, 12 months -->
+**_Table 3.1.2_**
+```{r echo=FALSE}
+kbl(u54_visit_hccpos) %>% kable_paper() %>% row_spec(c(1,7,11,12,13,16,18,27,37,39,49,53,56,59,60,70,107,129), color = "white", background = "#D7261E") %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+---
+
+> **3.1.3 Cohort: HIV+/HCC-**   
+> Follow-up events: Baseline
+
++ There are `r nrow(u54_visit_hccneg)` records.
++ 6 records highlighted in red color in the table below has their visit date(redcap_baseline) earlier than enrollment date.
+
+<!-- commented the following rows as we look at visit_type field OR redcap_repeat_instance = 1 -->
+  <!-- + `r sum(!(is.na(u54_visit_hccneg$redcap_baseline)))` records have data for baseline visit. -->
+
+**_Table 3.1.3_**  
+```{r echo=FALSE}
+kbl(u54_visit_hccneg) %>% kable_paper() %>% row_spec(c(4,23,62,82,153,200), color = "white", background = "#D7261E") %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+<br>
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+<br>
+
+
+### 3.2 Visit-HIV form 
+> **3.2.1 Cohort: HIV+/Fibrosis**    
+> Follow-up events: 6 months, 12 months, 18 months, 24 months, 30 months, 36 months
+
++ There are `r nrow(u54_hivvisit_select)` records. 
+<!-- commented to be consistent with section 3.1 -->
+  <!-- + `r sum(!(is.na(u54_hivvisit_select$redcap_6_months)))` records have data for 6 month follow-up visit. -->
+  <!-- + `r sum(!(is.na(u54_hivvisit_select$redcap_12_months)))` records have data for 12 month follow-up visit. -->
+  <!-- + `r sum(!(is.na(u54_hivvisit_select$redcap_18_months)))` records have data for 18 month follow-up visit. -->
+  <!-- + `r sum(!(is.na(u54_hivvisit_select$redcap_24_months)))` records have data for 24 month follow-up visit. -->
+  <!-- + `r sum(!(is.na(u54_hivvisit_select$redcap_30_months)))` records have data for 30 month follow-up visit. -->
+  <!-- + `r sum(!(is.na(u54_hivvisit_select$redcap_36_months)))` records have data for 36 month follow-up visit. -->
++ `r sum(u54_hivvisit_select_due$months_6_due)` patients are due for 6 month follow-up visit.
++ `r sum(u54_hivvisit_select_due$months_12_due)` patients are due for 12 month follow-up visit.
++ `r sum(u54_hivvisit_select_due$months_18_due)` patients are due for 18 month follow-up visit.
++ `r sum(u54_hivvisit_select_due$months_24_due)` patients are due for 24 month follow-up visit.
++ `r sum(u54_hivvisit_select_due$months_30_due)` patients are due for 30 month follow-up visit.
++ `r sum(u54_hivvisit_select_due$months_36_due)` patients are due for 36 month follow-up visit.
+
+**_Table 3.2.1_**
+```{r echo=FALSE}
+kbl(u54_hivvisit_select) %>% kable_paper() %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+<br>
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+<br>
+
+### 3.3 Visit-HCC form 
+> **3.3.1 Cohort: HIV+/HCC+;HIV-/HCC+**   
+> Follow-up events: 6 months, 12 months
+
++ There are `r nrow(u54_hccvisit_select)` records. 
+<!-- commented to be consistent with section 3.1 -->
+  <!-- + `r sum(!(is.na(u54_hccvisit_select$redcap_6_months)))` records have data for 6 month follow-up visit. -->
+  <!-- + `r sum(!(is.na(u54_hccvisit_select$redcap_12_months)))` records have data for 12 month follow-up visit. -->
++ `r sum(u54_hccvisit_select_due$months_6_due)` patients are due for 6 month follow-up visit.
++ `r sum(u54_hccvisit_select_due$months_12_due)` patients are due for 12 month follow-up visit.
+
+**_Table 3.3.1_**
+```{r echo=FALSE}
+kbl(u54_hccvisit_select) %>% kable_paper() %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+<br>
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+<br>
+
+### 3.4 Laboratory Testing Results 
+> **3.4.1 Cohort: HIV+/Fibrosis**   
+> Follow-up events: Baseline, 12 months, 24 months, 36 months
+
++ There are `r nrow(u54_labvisit_fibrosis)` records. 
+<!-- commented to be consistent with section 3.1 -->
+  <!-- + `r sum(!(is.na(u54_labvisit_fibrosis$redcap_baseline)))` records have data for baseline visit. -->
+  <!-- + `r sum(!(is.na(u54_labvisit_fibrosis$redcap_12_months)))` records have data for 12 month follow-up visit. -->
+  <!-- + `r sum(!(is.na(u54_labvisit_fibrosis$redcap_24_months)))` records have data for 24 month follow-up visit. -->
+  <!-- + `r sum(!(is.na(u54_labvisit_fibrosis$redcap_36_months)))` records have data for 36 month follow-up visit. -->
++ `r sum(u54_labvisit_fibrosis_due$months_12_due)` patients are due for 12 month follow-up visit.
++ `r sum(u54_labvisit_fibrosis_due$months_24_due)` patients are due for 24 month follow-up visit.
++ `r sum(u54_labvisit_fibrosis_due$months_36_due)` patients are due for 36 month follow-up visit.
+
+**_Table 3.4.1_**
+```{r echo=FALSE}
+kbl(u54_labvisit_fibrosis) %>% kable_paper() %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+---
+
+> **3.4.2 Cohorts: HIV+/HCC+, HIV-/HCC+**   
+> Follow-up events: Baseline, 6 months, 12 months
+
++ There are `r nrow(u54_labvisit_hccpos)` records. 
+<!-- commented to be consistent with section 3.1 -->
+  <!-- + `r sum(!(is.na(u54_labvisit_hccpos$redcap_baseline)))` records have data for baseline visit. -->
+  <!-- + `r sum(!(is.na(u54_labvisit_hccpos$redcap_6_months)))` records have data for 6 month follow-up visit. -->
+  <!-- + `r sum(!(is.na(u54_labvisit_hccpos$redcap_12_months)))` records have data for 12 month follow-up visit. -->
++ `r sum(u54_labvisit_hccpos_due$months_6_due)` patients are due for 12 month follow-up visit.
++ `r sum(u54_labvisit_hccpos_due$months_12_due)` patients are due for 24 month follow-up visit.
+
+**_Table 3.4.2_**
+```{r echo=FALSE}
+kbl(u54_labvisit_hccpos) %>% kable_paper() %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+---
+
+> **3.4.3 Cohort: HIV+/HCC-**   
+> Follow-up events: Baseline
+
++ There are `r nrow(u54_labvisit_hccneg)` records. 
+<!-- commented to be consistent with section 3.1 -->
+  <!-- + `r sum(!(is.na(u54_labvisit_hccneg$redcap_baseline)))` records have data for baseline visit. -->
+
+**_Table 3.4.3_**  
+```{r echo=FALSE}
+kbl(u54_labvisit_hccneg) %>% kable_paper() %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")
+```
+
+
+<br>
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+<br>
+
+<!------------------------------------------------------------------------>
+<!---------------            Missing Data Listing          --------------->
+<!------------------------------------------------------------------------>
+
+## 4.0 Missing Data Listing
+
+Missing/Discrepancies across all forms for the records in both arms.
+
+The fields that belong to "enrollment_arm_1 :: HIV_diagnosis" are not missing values but invalid values for the respective records. Please refer to notes in the appendix at the bottom of this page on how to interpret the invalid values in HIV Diagnosis form
+
+
+```{r all forms}
+wide_agg_missing %>%
+datatable( rownames = FALSE,class = 'cell-border stripe',
+   extensions = c('Buttons','FixedHeader','FixedColumns'),
+  options = list(columnDefs = list(list(className = 'dt-right')),
+    pageLength = 500, PageWidth =2000, fixedHeader = TRUE, dom = 'Bfrtip', buttons = c( 'colvis', 'print', 'pdf','copy','excel'), scrollY = TRUE, scrollX =TRUE,  fixedColumns = list(leftColumns = 1, rightColumns = 1)
+   ),escape = FALSE )%>% formatStyle("Form_fields","white-space"="wrap")
+```
+
+
+##**Appendix: 
+
+#####**Enrollment Form**
+
+1. Missing fields in Enrollment form - Other ID, site, enrolled date, date of birth, gender, marital status, occupation, education, Is Patient HIV positive, Is Patient HCC positive, all the fields in sections - Risk factors for HCC, Risk Factors for HIV, HCV, and HBV Acquisition, Hepatitis Immunizations and Co-Morbid Medical Conditions, Current alcohol use is 'Yes' and Alcohol duration in years is null
+
+#####**HIV diagnosis Form**
+
+1. AIDS diagnosis  is Yes and prior OI  is No and/or OI defining illness is either No or Unknown
+
+Note: If Prior OI is Yes or 1 or more OI is Yes then AIDS diagnosis should be Yes. We do not need to pull this but perhaps can change the field so that you cant have no checked for AIDS diagnosis if prior OI yes or an OI checked off
+ 
+#####**HCC diagnosis Form** is Yes
+
+1. Arterial enhancement is No
+2. BCLC is Missing
+3. Cirrhosis
+4. Steatosis
+5. Ascites
+6. Splenomegaly
+7. Varicies
+8. Portal vein invasion
+9. Portal Vein thrombosis
+ 
+#####**Visit Form**
+
+1. ECOG performance status is Missing
+2. HIV treatment yes, but missing start date and recent regimen
+3. HBV treatment yes, but missing start date and regimen
+4. missing fibroscan score
+5. missing other imaging results (any text)
+6. Height and Weight missiing
+7. HIV positive and HCC missing any value(i.e., missing both Yes or No)
+8. Jaundice and Encephalopathy missing any value(i.e., missing Yes or No or Unknown)
+
+#####**Laboratory Testing Results Form**
+1. (lab results) # with CD4 and HIV RNA but HIV negative
+2. HBsAg
+3. HBeAg (if HBsAg +)
+4. Anti-HBe (if HBsAg +)
+5. HBV DNA (if HBsAg +)
+6. Anti-HDV (if HBsAg +)
+7. Anti-HCV
+8. CD4 + Cell Count (if HIV +)
+9. HIV RNA (if HIV +)
+10. INR
+11. PT
+12. Creatinine
+13. Hemoglobin
+14. Platelets
+15. ALT
+16. AST
+17. Albumin
+18. Total Bilrubin
+19. Total Protein
+20. AFP
+ 
+#####**Visit HCC Form**
+
+1. Missing MELD score
+2. Missing CPS
+ 
+#####**Visit HIV Form**
+
+1. Missing USS findings or USS other completed
+2. CT findings. # missing any response either yes/no or unknown
+ 
+#####**Outcome Form**
+
+1. With missing death outcome  - has patient died
+2. With missing date of death if patient died is Yes
+3. With missing cause of death if patient died is Yes.
+
+<!-- ## Plot Missing Data: -->
+
+
+
+<!-- ```{r} -->
+<!-- #create new variable which can be used to rename variables later on  -->
+<!-- # can't use the field label directly, since several questions are very long -->
+<!-- newnames <- mymetadata %>% dplyr::select(field_label, field_name) %>%  -->
+<!--   dplyr::mutate(combo = paste0("'" ,field_label, "' = ", field_name)) -->
+
+
+
+
+
+<!-- ###=== rename and select variables of interest -->
+<!-- enrollplotfun <- function(dat){ -->
+<!--   enroll_show <- dat %>% -->
+<!--   dplyr::select('Date of Enrollment' = enr_enroll_d , -->
+<!--                 'Is the patient HIV positive' = enr_hiv_serology_y, -->
+<!--                 'Does the patient have HCC' = enr_hcc_serology_y, -->
+<!--                 'Age in years at enrollment' = enr_age, -->
+<!--                 'Sex' = enr_gender, -->
+<!--                 'Relationship to Patient' = enr_rel2patient, -->
+<!--                 'Marital Status' = enr_marital, -->
+<!--                 'Occupation' = enr_occupation, -->
+<!--                 'Highest Level of Education Completed' = enr_edu -->
+<!--                 ,'Able to provide your income for last 12 months?' = enr_income_y, -->
+<!--                 'Total annual combined family income' = enr_income, -->
+<!--                 'Viral Hepatitis B co-infection?' = enr_hcc_hepb_y, -->
+<!--                 'Viral Hepatitis C co-infection?' = enr_hcc_hepc_y, -->
+<!--                 'Current Herbal Drug Use?' = enr_hcc_herbaldrug_y , -->
+<!--                 'Current tobacco use?' = enr_hcc_tobacco_y , -->
+<!--                 'Pack-year history' = enr_packyr, -->
+<!--                 'Current alcohol use?' = enr_hcc_alcohol_y , -->
+<!--                 'Alcohol quantity in grams' = enr_alcohol_qty , -->
+<!--                 'Alcohol duration in years' = enr_alcohol_yrs, -->
+<!--                 'Family history of HCC?' = enr_hcc_hccfhx_y , -->
+<!--                 'Alcoholic liver disease?' = enr_hcc_alcliver_y, -->
+<!--                 'Non-alcoholic fatty liver disease?' = enr_hcc_fattyliver_y , -->
+<!--                 'MSM' = enr_hiv_msm_y, -->
+<!--                 'Current or past IV Drug Use?' = enr_hiv_idu_y, -->
+<!--                 'Current or past non-medical drug use?' = enr_hiv_nmdu_y, -->
+<!--                 'Hemophilia?' = enr_hiv_hemophilia_y, -->
+<!--                 'Blood transfusion?' = enr_hiv_transfusion_y, -->
+<!--                 'High-risk sexual behavior (non MSM)?' = enr_hiv_highrisksex_y, -->
+<!--                 'Iatrogenic?' = enr_hiv_iatrogenic_y, -->
+<!--                 'Prenatally acquired?' = enr_hiv_prenatal_y, -->
+<!--                 'Health care exposure?' = enr_hiv_hcexp_y, -->
+<!--                 'Other HIV, HBV, HCV risks:' = enr_hiv_other, -->
+<!--                 'Hepatitis B Immunization series administered?' = enr_liver_hepbimm, -->
+<!--                 'Hepatitis A Immunization series administered?' = enr_liver_hepaimm, -->
+<!--                 'Chronic kidney disease?\n\nGFR<60 for >= 30 months' = enr_comorbid_ckd_y, -->
+<!--                 'Renal replacement therapy?' = enr_comorbid_renaltx_y, -->
+<!--                 'Coronary artery disease?' = enr_comorbid_cad_y, -->
+<!--                 'Dyslipidemia?' = enr_comorbid_hyperlipid_y, -->
+<!--                 'Obesity?' = enr_comorbid_obese_y, -->
+<!--                 'Chronic lung disease/condition?' = enr_comorbid_lung_y, -->
+<!--                 'Diabetes mellitus?' = enr_comorbid_dm_y, -->
+<!--                 'Malignancy other than HCC?' = enr_comorbid_malig_y, -->
+<!--                 'Malignancy type?' = enr_comorbid_malig_type)     -->
+
+<!--   return(enroll_show = enroll_show) -->
+<!-- } -->
+
+
+
+<!-- hivplotfun <- function(dat){ -->
+<!--   hivshow <- dat %>% -->
+<!--   dplyr::select('Year of HIV diagnosis' = hiv_year, -->
+<!--                 'Pre-treatment/baseline HIV RNA' = hiv_rna_pre_tx, -->
+<!--                 'Pre-ART CD4 T-Cell Count' = hiv_cd4_initial , -->
+<!--                 'AIDS Diagnosis' = hiv_aids_y, -->
+<!--                 'Pre-ART WHO Stage' = hiv_who, -->
+<!--                 'Prior Opportunistic Infections' = hiv_prioroi_y, -->
+<!--                 'PJP' = hiv_pjp_y, -->
+<!--                 'MAC' = hiv_mac_y, -->
+<!--                 'CMV' = hiv_cmv_y, -->
+<!--                 'PML' = hiv_pml_y, -->
+<!--                 'Candidiasis' = hiv_candida_y, -->
+<!--                 'Cryptococcosis' = hiv_crypto_y, -->
+<!--                 'Non-Hodgkins Lymphoma' = hiv_nhl_y, -->
+<!--                 'Kaposis Sarcoma' = hiv_ks_y, -->
+<!--                 'Other ADE' = hiv_ade_other) -->
+
+<!--   return(hivshow = hivshow) -->
+<!-- } -->
+
+
+<!-- hccplotfun <- function(dat){ -->
+<!--   hcc_show <- dat %>% -->
+<!--   dplyr::select('Date of HCC Diagnosis' = hcc_diag_d, -->
+<!--                 'Cirrhosis?' = hcc_ct_cirr_y, -->
+<!--                 'Steatosis?' = hcc_ct_stea_y, -->
+<!--                 'Ascites?' = hcc_ct_asc_y , -->
+<!--                 'Splenomegaly?' = hcc_ct_spl_y, -->
+<!--                 'Varicies?' = hcc_ct_var_y, -->
+<!--                 'Liver size' = hcc_ct_liversize, -->
+<!--                 'Liver contour' = hcc_ct_livercontour, -->
+<!--                 'Liver mass diameter (largest lesion)' = hcc_massdiam, -->
+<!--                 'Number of lesions' = hcc_massnum, -->
+<!--                 'Total tumor burden' = hcc_massburden50, -->
+<!--                 'Arterial enhancement with washout?' = hcc_artwashout_y, -->
+<!--                 'Portal vein invasion?' = hcc_pvinvasion_y, -->
+<!--                 'Portal Vein thrombosis?' = hcc_pvthrombosis_y, -->
+<!--                 'CT Findings Other' = hcc_ct_oth, -->
+<!--                 'Liver biopsy results' = hcc_livbiop_text, -->
+<!--                 'BCLC Stage' = hcc_bclc) -->
+
+<!--   return(hcc_show = hcc_show) -->
+<!-- } -->
+
+
+<!-- visitplotfun <- function(dat){ -->
+<!--   visit_show <- dat %>% -->
+<!--     dplyr::select('Visit date' = visit_d, -->
+<!--                   'Is the patient HIV positive at time of Visit' = visit_hiv_y, -->
+<!--                   'Does the patient have HCC at time of visit?' = visit_hcc_y , -->
+<!--                   'Height' = visit_ex_height , -->
+<!--                   'Weight' = visit_ex_weight, -->
+<!--                   'BMI' = visit_sx_bmi, -->
+<!--                   'Jaundice' = visit_sx_jaun_y, -->
+<!--                   'Anorexia' = visit_sx_anorx_y, -->
+<!--                   'Fever' = visit_sx_fever_y, -->
+<!--                   'Abdominal swelling' = visit_sx_absw_y, -->
+<!--                   'Abdominal pain' = visit_sx_abpn_y, -->
+<!--                   'Malaena' = visit_sx_malae_y, -->
+<!--                   'Haematochezia' = visit_sx_hmchz_y, -->
+<!--                   'Vomiting' = visit_sx_vomit_y, -->
+<!--                   'Diarrhea' = visit_sx_diarr_y, -->
+<!--                   'Decreased urine' = visit_sx_decur_y, -->
+<!--                   'Irrational talk' = visit_sx_irrtk_y, -->
+<!--                   'Altered sleep pattern' = visit_sx_altslp_y, -->
+<!--                   'Haematemesis' = visit_sx_hmtem_y, -->
+<!--                   'Weight loss' = visit_sx_wtls_y, -->
+<!--                   'Cough' = visit_sx_cough_y, -->
+<!--                   'Change in skin color' = visit_sx_skclr_y, -->
+<!--                   'Weakness' = visit_sx_weak_y, -->
+<!--                   'Difficulty in breathing' = visit_sx_breath_y, -->
+<!--                   'Leg swelling' = visit_sx_lgsw_y, -->
+<!--                   'Restlessness' = visit_sx_restl_y, -->
+<!--                   'Slow mention' = visit_sx_slmen_y, -->
+<!--                   'Confusion' = visit_sx_conf_y, -->
+<!--                   'Memory loss' = visit_sx_memls_y, -->
+<!--                   'ECOG performance status' = visit_hcc_ecog, -->
+<!--                   'Ciprofloxacin' = visit_rx_cipro_y, -->
+<!--                   'Metronidazole' = visit_rx_metro_y, -->
+<!--                   'Lactulose' = visit_rx_lactu_y, -->
+<!--                   'Aldactone' = visit_rx_alda_y, -->
+<!--                   'Furosemide' = visit_rx_furo_y, -->
+<!--                   'DF-118' = visit_rx_df_y, -->
+<!--                   'Livolin' = visit_rx_livo_y, -->
+<!--                   'Silybon' = visit_rx_sily_y, -->
+<!--                   'HIV Treatment' = visit_hiv_rx_y, -->
+<!--                   'HIV Treatment Start date' = visit_hiv_rx_sd, -->
+<!--                   'HIV Treatment Most recent Regimen' = visit_hiv_rx_reg, -->
+<!--                   'HBV Treatment' = visit_hbv_rx_y, -->
+<!--                   'HBV Treatment Start date' = visit_hbv_rx_sd, -->
+<!--                   'HBV TreatmentMost recent Regimen' = visit_hbv_rx_reg, -->
+<!--                   'HCV Treatment?' = visit_hcv_rx_y, -->
+<!--                   'HCV Treatment Start date?' = visit_hcv_rx_sd, -->
+<!--                   'HCV Treatment Most Recent Regimen' = visit_hcv_rx_reg, -->
+<!--                   'Fluffy hair?' = visit_ex_fhair_y, -->
+<!--                   'Pale?' = visit_ex_pale_y, -->
+<!--                   'Jaundice?' = visit_ex_jaundice_y, -->
+<!--                   'Dehydrated?' = visit_ex_dehyd_y, -->
+<!--                   'Cyanosed?' = visit_ex_cyan_y, -->
+<!--                   'Lymph nodes?' = visit_ex_ln_y, -->
+<!--                   'Pedal oedema?' = visit_ex_poed_y, -->
+<!--                   'Scanty axillary hair?' = visit_ex_axhair_y, -->
+<!--                   'Digital clubbing?' = visit_ex_digclub_y, -->
+<!--                   'Leuconychia?' = visit_ex_leuconych_y, -->
+<!--                   'Hyperpigmented palms?' = visit_ex_palmhyperpig_y, -->
+<!--                   'Dupuytrens contracture?' = visit_ex_dupuy_y, -->
+<!--                   'Breast atrophy?' = visit_ex_bratroph_y, -->
+<!--                   'Spider naevi?' = visit_ex_spider_y, -->
+<!--                   'Hyperpigmentation?' = visit_ex_hyperpig_y, -->
+<!--                   'Female pubic hair pattern?' = visit_ex_fpubic_y, -->
+<!--                   'Testicular atrophy?' = visit_ex_testat_y, -->
+<!--                   'Asterixsis?' = visit_ex_asterix_y, -->
+<!--                   'Encephalopathy' = visit_ex_liver_enc_y, -->
+<!--                   'Ascites' = visit_ex_liver_asc_y, -->
+<!--                   'Varices' = visit_ex_liver_var_y, -->
+<!--                   'Hepatopulmonary syndrome?' = visit_ex_liver_heppulm_y, -->
+<!--                   'Hepatic hydrothorax' = visit_ex_liver_hydrthor_y, -->
+<!--                   'Hepatorenal syndrome?' = visit_ex_liver_hepren_y, -->
+<!--                   'TIPS placement?' = visit_ex_liver_tips_y, -->
+<!--                   'Portal vein thrombosis?' = visit_ex_liver_pvthrom_y, -->
+<!--                   'SBP?' = visit_ex_liver_sbp_y, -->
+<!--                   'Ruptured nodule?' = visit_ex_liver_ruptn_y, -->
+<!--                   'Fibroscan score:' = visit_inv_fibro, -->
+<!--                   'HBV combo' = visit_lab_hbvcombo_y, -->
+<!--                   'HBeAg (HBsAg positives)' = visit_lab_hbeag_y, -->
+<!--                   'Anti-HBe (HBsAg positives)' = visit_lab_antihbe_y, -->
+<!--                   'HBV DNA (HBsAg positives)' = visit_lab_hbvdna_y, -->
+<!--                   'HDV antibody (HBsAg positives)' = visit_lab_antihdv_y, -->
+<!--                   'Anti-HCV' = visit_lab_antihcv_y, -->
+<!--                   'CD4 + cell count (HIV positives)\n' = visit_lab_cd4cnt_y, -->
+<!--                   'HIV RNA (HIV positives)' = visit_lab_hivrna_y, -->
+<!--                   'INR/PT' = visit_lab_inrpt_y, -->
+<!--                   'Creatinine' = visit_lab_cr_y, -->
+<!--                   'Complete blood count (Hgb, platelets)' = visit_lab_cbc_y, -->
+<!--                   'ALT, AST, Albumin, Bilirubin, Total Protein' = visit_lab_liverlabs_y, -->
+<!--                   'AFP' = visit_lab_afp_y, -->
+<!--                   'Specimens for Genomic analyses' = visit_lab_genomicspec_y) -->
+
+<!--   return(visit_show = visit_show) -->
+<!-- } -->
+
+
+
+<!-- labplotfun <- function(dat){ -->
+<!--   lab_show <- dat %>% -->
+<!--   dplyr::select('HBsAg' = visit_lab_hbsag_res, -->
+<!--                 'Anti-HBs' = visit_lab_anti_hbs_res, -->
+<!--                 'Anti-HBc' = visit_lab_antihbc_res, -->
+<!--                 'HBeAg' = visit_lab_hbeag_res, -->
+<!--                 'Anti-HBe' = visit_lab_antihbe_res, -->
+<!--                 'HBV DNA' = visit_lab_hbvdna_res, -->
+<!--                 'Anti-HDV' = visit_lab_antihdv_res, -->
+<!--                 'Anti-HCV' = visit_lab_antihcv_res, -->
+<!--                 'HCV RNA' = visit_lab_hcvrna_res, -->
+<!--                 'CD4 + Cell Count' = visit_lab_cd4cnt_res, -->
+<!--                 'HIV RNA' = visit_lab_hivrna_res, -->
+<!--                 'INR' = visit_lab_inr_res, -->
+<!--                 'PT' = visit_lab_pt_res, -->
+<!--                 'Creatinine' = visit_lab_creatinine_res, -->
+<!--                 'Hemoglobin' = visit_lab_hemoglobin_res, -->
+<!--                 'Platelets' = visit_lab_platelets_res, -->
+<!--                 'ALT' = visit_lab_alt_res, -->
+<!--                 'AST' = visit_lab_ast_res, -->
+<!--                 'Albumin' = visit_lab_albumin_res, -->
+<!--                 'Total Bilrubin' = visit_lab_tot_bil_res, -->
+<!--                 'Total Protein' = visit_lab_tot_pro_res, -->
+<!--                 'AFP' = visit_lab_afp_res ) -->
+
+<!--   return(lab_show = lab_show) -->
+<!-- } -->
+
+
+<!-- visitHIVfun <- function(dat){ -->
+<!--   vHIV <- dat %>% -->
+<!--     dplyr::select( 'Cirrhosis?' = visit_hiv_ct_cirr_y, -->
+<!--                   'Steatosis?' = visit_hiv_ct_stea_y, -->
+<!--                   'Ascites?' = visit_hiv_ct_asc_y, -->
+<!--                   'Splenomegaly?' = visit_hiv_ct_spl_y, -->
+<!--                   'Varicies?' = visit_hiv_ct_var_y, -->
+<!--                   'Liver size' = visit_hiv_ct_liversize, -->
+<!--                   'Liver texture / density' = visit_hiv_ct_livertexture, -->
+<!--                   'Liver contour' = visit_hiv_ct_livercontour, -->
+<!--                   'Liver mass diameter (largest lesion)' = visit_hiv_massdiam, -->
+<!--                   'Number of lesions' = visit_hiv_massnum, -->
+<!--                   'Total tumor burden' = visit_hiv_massburden50, -->
+<!--                   'Arterial enhancement with washout?' = visit_hiv_artwashout_y, -->
+<!--                   'Portal vein invasion?' = visit_hiv_pvinvasion_y, -->
+<!--                   'Portal Vein thrombosis?' = visit_hiv_pvthrombosis_y, -->
+<!--                   'CT Findings Other' = visit_hiv_ct_oth ) -->
+
+<!--   return(vHIV = vHIV) -->
+<!-- } -->
+
+<!-- visitHCCfun <- function(dat){ -->
+<!--   vHCC <- dat %>% -->
+<!--     dplyr::select('Tumor resection?' = visit_hcc_tx_resect_y, -->
+<!--                   'Transcatheter aterial embolization?' = visit_hcc_tx_embol_y, -->
+<!--                   'Brachytherapy?' = visit_hcc_tx_brachy_y, -->
+<!--                   'Chemotherapy?' = visit_hcc_tx_chemo_y, -->
+<!--                   'Sorafenib?' = visit_hcc_tx_sorafenib_y, -->
+<!--                   'Alcohol ablation?' = visit_hcc_tx_alcabl_y, -->
+<!--                   'Radiofrequency ablation?' = visit_hcc_tx_radabl_y, -->
+<!--                   'Palliative care?' = visit_hcc_tx_pall_y, -->
+<!--                   'Other treatment?' = visit_hcc_tx_other, -->
+<!--                   'Child-Pugh Score' = visit_hcc_child_pugh, -->
+<!--                   'MELD Score' = visit_hcc_meld) -->
+
+<!--   return(vHCC = vHCC) -->
+<!-- } -->
+
+
+<!-- outcomeplotfun <- function(dat){ -->
+<!--   outcome_show <- dat %>% -->
+<!--   dplyr::select('Date form was completed' = final_completed_d, -->
+<!--                 'Withdraw consent from the study' = final_withdraw_y, -->
+<!--                 'Date consent withdrawn' = final_withdraw_d, -->
+<!--                 'Has the patient died' = final_death_y, -->
+<!--                 'Last time the patient was known alive' = final_fu_d, -->
+<!--                 'Date of death' = final_death_d, -->
+<!--                 'Causes of Death' = final_death_causes) -->
+
+<!--   return(outcome_show = outcome_show) -->
+<!-- } -->
+<!-- ``` -->
+
+<!-- <!------------------------------------------------------------------------> -->
+<!-- <!----------             Plot missing data: Arm 1             ------------> -->
+<!-- <!------------------------------------------------------------------------> -->
+<!-- ### Arm 1 -->
+
+<!-- There are `r ncol(arm1_final)` variables in the Arm 1 subset (n= `r length(unique(arm1_final$record_id))`). -->
+
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(arm1_final, cluster = FALSE) + -->
+<!--   labs(title = "Arm 1 - missingness")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) -->
+<!-- ``` -->
+
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- <!----------    Enroll    -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(enrollplotfun(arm1_final), cluster = FALSE) + -->
+<!--   labs(title = "Enroll - missingness: Arm 1")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- <!----------    HIV Diagnosis   -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(hivplotfun(arm1_final), cluster = FALSE) + -->
+<!--   labs(title = "HIV Diagnosis - missingness: Arm 1")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- <!----------    HCC Diagnosis   -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(hccplotfun(arm1_final), cluster = FALSE) + -->
+<!--   labs(title = "HCC Diagnosis - missingness: Arm 1")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- <!----------    Visit    -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(visitplotfun(arm1_final), cluster = FALSE)+ -->
+<!--   labs(title = "Visit - missingness: Arm 1")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- <!----------    Laboratory Testing Results    -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(labplotfun(arm1_final), cluster = FALSE)+ -->
+<!--   labs(title = "Laboratory Testing Results - missingness: Arm 1")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- <!----------    Visit HCC  -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(visitHCCfun(arm1_final), cluster = FALSE) + -->
+<!--   labs(title = "Visit HCC - missingness: Arm 1")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- <!----------    Outcome   -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(outcomeplotfun(arm1_final), cluster = FALSE)+ -->
+<!--   labs(title = "Outcome - missingness: Arm 1")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+
+
+
+<!-- <br> -->
+<!-- <br> -->
+<!-- <br> -->
+<!-- <br> -->
+
+
+
+
+<!-- <!------------------------------------------------------------------------> -->
+<!-- <!----------             Plot missing data: Arm 2             ------------> -->
+<!-- <!------------------------------------------------------------------------> -->
+<!-- ### Arm 2 -->
+
+<!-- There are `r ncol(arm2_final)` variables in the Arm 2 subset (n= `r length(unique(arm2_final$record_id))`). -->
+
+
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(arm2_final, cluster = FALSE) + -->
+<!--   labs(title = "Arm 2 - missingness")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) -->
+<!-- ``` -->
+
+
+
+<!-- <br> -->
+<!-- <br> -->
+<!-- <!----------    Enroll    -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(enrollplotfun(arm2_final), cluster = FALSE) + -->
+<!--   labs(title = "Enroll - missingness: Arm 2")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- <!----------    HIV Diagnosis   -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(hivplotfun(arm2_final), cluster = FALSE) + -->
+<!--   labs(title = "HIV Diagnosis - missingness: Arm 2")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- <!----------    Visit    -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(visitplotfun(arm2_final), cluster = FALSE)+ -->
+<!--   labs(title = "Visit - missingness: Arm 2")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- <!----------    Laboratory Testing Results    -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(labplotfun(arm2_final), cluster = FALSE)+ -->
+<!--   labs(title = "Laboratory Testing Results - missingness: Arm 2")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- <!----------    Visit HIV  -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(hivplotfun(arm2_final), cluster = FALSE) + -->
+<!--   labs(title = "Visit HIV - missingness: Arm 2")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- <!----------   HCC Diagnosis   -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(hccplotfun(arm2_final), cluster = FALSE)+ -->
+<!--   labs(title = "HCC Diagnosis - missingness: Arm 2")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- <!----------   Visit HCC   -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(visitHCCfun(arm2_final), cluster = FALSE)+ -->
+<!--   labs(title = "Visit HCC - missingness: Arm 2")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+
+<!-- <br> -->
+<!-- <br> -->
+
+<!-- <!----------    Outcome   -----------> -->
+<!-- ```{r fig.align="center"} -->
+<!-- vis_miss(outcomeplotfun(arm2_final), cluster = FALSE)+ -->
+<!--   labs(title = "Outcome - missingness: Arm 2")+ -->
+<!--   theme(plot.title = element_text(hjust=0.5)) + -->
+<!--   theme(plot.margin = margin(.5, 2, .5, 2, "cm")) -->
+<!-- ``` -->
+
+<!-- <br> -->
+<!-- <br> -->
+<!-- <br> -->
+<!-- <br> -->
+
+
+
