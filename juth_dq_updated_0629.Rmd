@@ -1,0 +1,1525 @@
+---
+title: "Missing Data - Project 1 - JUTH"
+author: "Neelima Katam, Kirsten Burdett, BISC"
+date: "`r format(Sys.Date(), '%B %d, %Y')`"
+output: 
+  html_document: 
+    toc: true
+    number_sections: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
+ 
+---
+
+<style type="text/css">
+#TOC {
+  background-color: purple;
+}
+.tocify-subheader > .tocify-item {
+  <!--text-indent: initial;-->
+  padding-left: 2em;
+}
+</style>
+
+<!-- -----------------      Updates     ------------------ -->
+<!-- Updated: Kirsten Burdett -->
+<!--          August 21, 2020 -->
+<!--          Added table for completed forms as well as -->
+<!--          figures for missing data analysis -->
+
+
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r message = FALSE, warning = FALSE}
+library(DT)  #for datatable() 
+library(Hmisc)  #capitalize
+library(kableExtra)
+#library(visdat)
+
+
+#source("/Volumes/fsmresfiles/PrevMed/Projects/QDSC/Projects/07 Nigeria U54/Data quality reports/Project1_version4/R scripts/updated_juth_project1_data_quality_version4_KB.R")
+
+
+
+multi_join <- function(byvar, listdat, joinfun, ...){
+    require("dplyr")
+    output <- Reduce(function(x, y) {joinfun(by=byvar, x, y, ...)}, listdat)
+    return(output)
+}
+
+# Need to do Arm 1 and Arm 2 seperatly 
+# Arm1: 3 Events (Enrollment = c(Enrollment, Hiv Diagnosis, HCC diagnosis), Visit = c(Visit, Laboratory Testing Results, Visit - HCC), Outcome = Outcome)
+# Arm2: 4 events (Enrollment = c(Enrollment, HIV Diagnosis), Visit = c(Visit, Laboratory Testing Results, Visit - HIV), HCC Diagnosis = c(HCC Diagnosis, Visit - HCC), Study End = Outcome)
+
+arm1_dat <- juth_data %>%
+  dplyr::filter(redcap_event_name %in% c("enrollment_arm_1", "visit_arm_1", "outcome_arm_1"))
+
+arm2_dat <- juth_data %>%
+  dplyr::filter(redcap_event_name %in% c("enrollment_arm_2", "visit_arm_2", "hcc_diagnosis_arm_2", "study_end_arm_2"))
+#dim(juth_data); dim(arm1_dat); dim(arm2_dat)
+# table(juth_data$redcap_event_name)
+
+
+
+
+#==========    Arm 1 Events    ==========#
+#==== enroll
+e1raw <- mymetadata$field_name[mymetadata$form_name %in% c("enrollment", "hiv_diagnosis", "hcc_diagnosis")]
+enrollvars1 <- e1raw[e1raw %in% names(arm1_dat)]
+
+enroll_d1 <- arm1_dat %>%
+  dplyr::filter(redcap_event_name == "enrollment_arm_1") %>%
+  dplyr::select(record_id, redcap_event_name, enrollvars1)
+
+#==== visit
+v_raw1 <- mymetadata$field_name[mymetadata$form_name %in% c("visit", "laboratory_testing_results", "visit_hcc")]
+vvars1 <- v_raw1[v_raw1 %in% names(arm1_dat)]
+
+visit_d1 <- arm1_dat %>%
+  dplyr::filter(redcap_event_name == "visit_arm_1") %>%
+  dplyr::select(record_id, vvars1)
+
+#==== outcome
+o_raw1 <- mymetadata$field_name[mymetadata$form_name == "outcome"]
+outcomevars1 <- o_raw1[o_raw1 %in% names(arm1_dat)]
+
+outcome_d1 <- arm1_dat %>%
+  dplyr::filter(redcap_event_name == "outcome_arm_1") %>%
+  dplyr::select(record_id, outcomevars1)
+
+
+arm1_final <- multi_join(byvar = "record_id", list(enroll_d1, visit_d1, outcome_d1), joinfun = full_join)
+#dim(arm1_dat); dim(enroll_d1); dim(visit_d1); dim(outcome_d1); dim(arm1_final)
+
+
+
+
+#==========    Arm 2 Events    ==========#
+#==== enroll
+e2raw <- mymetadata$field_name[mymetadata$form_name %in% c("enrollment", "hiv_diagnosis")]
+enrollvars2 <- e2raw[e2raw %in% names(arm2_dat)]
+
+enroll_d2 <- arm2_dat %>%
+  dplyr::filter(redcap_event_name == "enrollment_arm_2") %>%
+  dplyr::select(record_id, redcap_event_name, enrollvars2)
+
+#==== visit
+v_raw2 <- mymetadata$field_name[mymetadata$form_name %in% c("visit", "laboratory_testing_results", "visit_hiv")]
+vvars2 <- v_raw2[v_raw2 %in% names(arm2_dat)]
+
+visit_d2 <- arm2_dat %>%
+  dplyr::filter(redcap_event_name == "visit_arm_2") %>%
+  dplyr::select(record_id, vvars2)
+
+#==== hcc diagnosis
+hcc_raw2 <- mymetadata$field_name[mymetadata$form_name %in% c("hcc_diagnosis", "visit_hcc")]
+hccvars2 <- hcc_raw2[hcc_raw2 %in% names(arm2_dat)]
+
+hcc_d2 <- arm2_dat %>%
+  dplyr::filter(redcap_event_name == "hcc_diagnosis_arm_2") %>%
+  dplyr::select(record_id, hccvars2)
+
+
+#==== study end
+o_raw2 <- mymetadata$field_name[mymetadata$form_name == "outcome"]
+outcomevars2 <- o_raw2[o_raw2 %in% names(arm2_dat)]
+
+outcome_d2 <- arm2_dat %>%
+  dplyr::filter(redcap_event_name == "study_end_arm_2") %>%
+  dplyr::select(record_id, outcomevars2)
+
+
+arm2_final <- multi_join(byvar = "record_id", list(enroll_d2, visit_d2, hcc_d2, outcome_d2), joinfun = full_join)
+#dim(arm2_dat); dim(enroll_d2); dim(visit_d2); dim(hcc_d2); dim(outcome_d2); dim(arm2_final)
+# HIV+/Fibrosis (n= `r count(u54_id %>% dplyr::filter((u54_id$redcap_event_name == #"enrollment_arm_2") & u54_id$enr_hiv_serology_y == "1" & u54_id$enr_hcc_serology_y == #"0"))`), 
+```
+
+
+
+<br>
+
+
+* * *
+
+
+As of the current data pull (`r format(Sys.Date(),'%d %b %Y')`), there are `r length(unique(juth_data$record_id))` subjects in the JUTH Project 1 Clinical REDCap database with `r length(unique(arm1_final$record_id))` in Arm 1 and `r length(unique(arm2_final$record_id))` in Arm 2. 
+
+The cohorts are defined as follows:
+
+* HIV-/HCC- (n= `r nrow(u54_id %>% dplyr::filter(u54_id$enr_hiv_serology_y == "0" & u54_id$enr_hcc_serology_y == "0"))`),
+* HIV-/HCC+ (n= `r nrow(u54_id %>% dplyr::filter(u54_id$redcap_event_name == "enrollment_arm_1" & u54_id$enr_hiv_serology_y == "0" & u54_id$enr_hcc_serology_y == "1"))`),
++ HIV+/Fibrosis (n= `r nrow(u54_id %>% dplyr::filter(u54_id$redcap_event_name == "enrollment_arm_2"))`), 
++ HIV+/HCC- (n= `r nrow(u54_id %>% dplyr::filter(u54_id$redcap_event_name == "enrollment_arm_1" & u54_id$enr_hiv_serology_y == "1" & u54_id$enr_hcc_serology_y == "0"))`), and 
++ HIV+/HCC+ (n= `r nrow(u54_id %>% dplyr::filter(u54_id$redcap_event_name == "enrollment_arm_1" & u54_id$enr_hiv_serology_y == "1" & u54_id$enr_hcc_serology_y == "1"))`).
+
++ "HIV FIbrosis" variable is missing in (n= `r nrow(u54_id %>% dplyr::filter(u54_id$redcap_event_name == "enrollment_arm_2" & is.na(u54_id$enr_fibrosis_y)))` records entered in REDCap Enrollment Arm 2.
+```{r message = FALSE, warning = FALSE}
+#& u54_id$enr_hiv_serology_y == "1" & u54_id$enr_hcc_serology_y == "0"))`) 
+```
+
+
+<!-- Note that there are  n= `r length(u54_id %>% dplyr::filter((u54_id$redcap_event_name == "enrollment_arm_2") & ((u54_id$enr_hiv_serology_y == 1 & u54_id$enr_hcc_serology_y == 1 ) | (u54_id$enr_hiv_serology_y == 1 & is.na(u54_id$enr_hcc_serology_y)))))` subjects entered in enrollment_arm_2(HIV+/Fibrosis cohort) which are not HIV+/HCC-. -->
+```{r message = FALSE, warning = FALSE}
+#& u54_id$enr_hiv_serology_y == "1" & u54_id$enr_hcc_serology_y == "1"))`) 
+```
+
+
+<br>
+<br>
+
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+
+
+<!------------------------------------------------------------------------>
+<!---------------               Complete Forms             --------------->
+<!------------------------------------------------------------------------>
+
+# **Complete Forms**
+
+There are `r length(unique(mymetadata$form_name))` forms, which include `r paste(capitalize(unique(mymetadata$form_name)), collapse = ", ")`. The table below describes the number of completed forms in total and by arm.
+
+```{r}
+listforms <- grep("*_complete", names(juth_data), value = TRUE)
+listforms <- listforms[!listforms == "final_completed_d"]  
+
+formfun <- function(dat, formvar, roundval){
+  cleanform <- gsub("_complete", "", formvar)
+  formName <- capitalize(gsub("_", " ",cleanform))
+  
+  Ncomplete <- sum(dat[,formvar] == 2 | dat[,formvar] == "Complete", na.rm=TRUE)
+  subj <- length(unique(dat$record_id))
+  Nperc <- paste0(Ncomplete, " (", round((Ncomplete/subj)*100,roundval) , ")")  #combine to get n(%)
+  
+  outshow <- tibble("Form" = formName, "n (%)" = Nperc)
+
+  return(outshow)
+}
+
+#test <- formfun(juth_data, "visit_complete", 2); test
+
+formshow <- lapply(listforms, function(x) formfun(juth_data, x, 2))   #form totals for all subjects
+allforms <- multi_join(byvar = c("Form", "n (%)"), formshow, joinfun =full_join)
+allforms <- allforms %>% dplyr::rename(!!paste0("Total (n=", length(unique(juth_data$record_id)), ")") := `n (%)`)
+
+arm1show <- lapply(listforms, function(x) formfun(arm1_dat, x, 2))   #form totals for all subjects
+arm1forms <- multi_join(byvar = c("Form", "n (%)"), arm1show, joinfun =full_join)
+arm1forms <- arm1forms %>% dplyr::rename(!!paste0("Arm 1 (n=", length(unique(arm1_dat$record_id)), ")") := `n (%)`)
+
+arm2show <- lapply(listforms, function(x) formfun(arm2_dat, x, 2))   #form totals for all subjects
+arm2forms <- multi_join(byvar = c("Form", "n (%)"), arm2show, joinfun =full_join)
+arm2forms <- arm2forms %>% dplyr::rename(!!paste0("Arm 2 (n=", length(unique(arm2_dat$record_id)), ")") := `n (%)`)
+
+final_forms <- multi_join(byvar = "Form", list(allforms, arm1forms, arm2forms), joinfun= full_join)
+```
+
+
+```{r echo=FALSE}
+kable(final_forms, booktabs = TRUE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  add_header_above(c(" " = 2, "Arm" = 2))
+```
+
+<br>
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+<br>
+
+
+<!------------------------------------------------------------------------>
+<!---------------              Follow-up visits            --------------->
+<!------------------------------------------------------------------------>
+
+# **Expected(Calculated) Follow-up visits**
+
+**_Table 2.0_**
+```{r echo=FALSE}
+# u54_id_sel <- u54_id %>% select(-enr_hiv_serology_y,-enr_hcc_serology_y,-enr_fibrosis_y)
+# knitr::kable(u54_id_sel, col.names = c("Record_id", "REDCap Event", "Other_ID", #"Enrollment Date","Cohort", "Cohort2", "6 months","12 months","24 months","36 #months"))
+
+kbl(u54_id_sel) %>% kable_paper() %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")
+
+##create excel file output for the sites
+# write.csv(alive_u54_id_sel, '~/Documents/neelima/Test/output/luth/calculated_follow_up_alive_dates.csv',row.names = FALSE)
+# write.csv(u54_id_sel, '~/Documents/neelima/Test/output/luth/calculated_follow_up_dates.csv',row.names = FALSE)
+
+# WriteXLS(alive_u54_id_sel, paste("/Users/nkj5125//Documents/neelima/Test/output/luth/calculated_follow_up_alive_dates_",Sys.Date() ,".xlsx", sep = ""))
+# WriteXLS(u54_id_sel, paste("/Users/nkj5125//Documents/neelima/Test/output/luth/calculated_follow_up_dates_",Sys.Date() ,".xlsx", sep = ""))
+```
+<br>
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+<br>
+
+# **Follow-up visits by Forms and Cohorts**
+
+## Visit form 
+### Cohort: HIV+/Fibrosis {.tabset .tabset-pills}    
+> Follow-up events: Baseline, 12 months, 24 months, 36 months
+
++ There are `r u54_visit_fibrosis_rec` subjects. 
+  + `r nrow(subset(u54_visit_fibrosis, (visit_type == "Baseline")))` out of `r length(unique(u54_visit_fibrosis$record_id))` subjects have data for baseline visit.
+  + `r nrow(unique(u54_visit_fibrosis_12m))` out of `r length(which(u54_visit_fibrosis_due$months_12_due == 1))` subjects have data for 12 months follow-up visit.
+  + `r nrow(unique(u54_visit_fibrosis_24m))` out of `r length(which(u54_visit_fibrosis_due$months_24_due == 1))` subjects have data for 24 months follow-up visit.
+  + `r nrow(unique(u54_visit_fibrosis_36m))` out of `r length(which(u54_visit_fibrosis_due$months_36_due == 1))` subjects have data for 36 months follow-up visit.
+
+*Note:*
+ 
+  + If a calculated follow-up event date falls within the range between enrollment date and the report run date(today()), then a patient is due for that follow-up event.
+  + For example `r length(which(u54_visit_fibrosis_due$months_12_due == 1))` subjects are eligible/due for for 12 months followup visit.
+
+Tabs:
+
+<!-- + All Follow-up events: All records displayed for all Follow-up events. -->
++ **Missing Visit type/date**: `r nrow(u54_visit_fibrosis_missviss)` subjects.
++ **Missing Baseline data**: `r nrow(u54_visit_fibrosis_bl_miss)` subjects.
++ **Visit date error**: `r nrow(u54_visit_fibrosis_b4enr)` subjects.
++ **Missing 12 Months data**: `r nrow(u54_visit_fibrosis_12m_due) - nrow(u54_visit_fibrosis_12m)` subjects.
++ **12 Months follow-up error**: `r nrow(u54_visit_fibrosis_12 <- u54_visit_fibrosis %>% 
+                         dplyr::filter(u54_visit_fibrosis$visit_type == "12 Months" &
+                                       (u54_visit_fibrosis$datediff_enroll_visit < 6 |    
+                                       u54_visit_fibrosis$datediff_enroll_visit > 18)))` subjects.
++ **Missing 24 Months data**: `r nrow(u54_visit_fibrosis_24m_due) - nrow(u54_visit_fibrosis_24m)` subjects.
++ **24 Months  follow-up error**: `r nrow(u54_visit_fibrosis_24 <- u54_visit_fibrosis %>% 
+                         dplyr::filter(u54_visit_fibrosis$visit_type == "24 Months" &
+                                       (u54_visit_fibrosis$datediff_enroll_visit < 18 |    
+                                       u54_visit_fibrosis$datediff_enroll_visit > 30)))` subjects.
++ **Missing 36 Months data**: `r nrow(u54_visit_fibrosis_36m_due) - nrow(u54_visit_fibrosis_36m)` subjects.
++ **36 Months follow-up error**: `r nrow(u54_visit_fibrosis_36 <- u54_visit_fibrosis %>% 
+                         dplyr::filter(u54_visit_fibrosis$visit_type == "36 Months" &
+                                       (u54_visit_fibrosis$datediff_enroll_visit < 30 |    
+                                       u54_visit_fibrosis$datediff_enroll_visit > 42)))` subjects.
++ **Non-designated events**: `r length(unique(u54_visit_fibrosis_nonevent$record_id))` subjects.
+
+<!-- {-} next to the #### subheaders disables numbering in the tabs-->
+<!-- #### All Follow-up events {-} -->
+<!-- **_Table 3.1.1_** -->
+<!-- ```{r table3.1.1, echo=FALSE} -->
+
+<!-- kbl(u54_visit_fibrosis, escape = F) %>% kable_paper() %>% -->
+<!-- kable_styling(bootstrap_options = "striped", full_width = FALSE) %>% -->
+<!-- scroll_box(width = "100%", height = "500px") -->
+
+<!-- ``` -->
+
+#### Missing Visit type/date {-}
+**_Table 3.1.1.1_**
+```{r table3.1.1.1, echo=FALSE}
+#u54_visit_fibrosis_missviss <- subset(u54_visit_fibrosis, ((is.na(visit_type) | (is.na(visit_d)))))
+u54_visit_fibrosis_missviss <- u54_visit_fibrosis_missviss %>% dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_type, "Visit date" = visit_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_visit)
+kbl(u54_visit_fibrosis_missviss, escape = F, row.names = FALSE) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit type/date is missing for these subjects. There can be multiple rows per subject due to data missing in more than one instance.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### Missing Baseline data {-}
+**_Table 3.1.1.2_**
+```{r table3.1.1.2, echo=FALSE}
+
+u54_visit_fibrosis_bl_miss<- u54_visit_fibrosis_bl_miss %>%
+                         dplyr::rename("Record ID" = record_id, "U54 SubjectID" = enr_otherid)
+kbl(u54_visit_fibrosis_bl_miss, escape = F) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Baseline data is missing for these subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+
+```
+
+#### Visit date error {-}
+**_Table 3.1.1.3_**
+```{r table3.1.1.3, echo=FALSE}
+
+u54_visit_fibrosis_b4enr <- u54_visit_fibrosis_b4enr %>%  dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_type, "Visit date" = visit_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_visit)
+kbl(u54_visit_fibrosis_b4enr, row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit date entered is prior to Enrollment date.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+``` 
+
+#### Missing 12 Months data {-}
+**_Table 3.1.1.4_**
+```{r table3.1.1.4, echo=FALSE}
+
+u54_visit_fibrosis_12m_miss <- u54_visit_fibrosis_12m_miss %>% dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_visit_fibrosis_12m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 12 Months follow-up data is missing for these subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+ 
+```
+
+#### 12 Months follow-up error {-}
+**_Table 3.1.1.5_**
+```{r table3.1.1.5, echo=FALSE}
+u54_visit_fibrosis_12 <- u54_visit_fibrosis %>% 
+                         dplyr::filter(u54_visit_fibrosis$visit_type == "12 Months" &
+                                       (u54_visit_fibrosis$datediff_enroll_visit < 6 |    
+                                       u54_visit_fibrosis$datediff_enroll_visit > 18)) %>%
+                         dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_type, "Visit date" = visit_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_visit)
+kbl(u54_visit_fibrosis_12) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 12 Months: Window for 12 months Follow-up visit is 6-18 months. Subjects whose visit date fall outside this window for a 12 month visit are displayed. ", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+
+
+```
+
+#### Missing 24 Months data {-}
+**_Table 3.1.1.6_**
+```{r table3.1.1.6, echo=FALSE}
+# (Enrollment date - Visit date) IN MONTHS`
+
+u54_visit_fibrosis_24m_miss <- u54_visit_fibrosis_24m_miss %>% dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_visit_fibrosis_24m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")  %>%
+  footnote(general = " 24 Months follow-up data is missing for these subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+```
+
+#### 24 Months follow-up error {-}
+**_Table 3.1.1.7_**
+```{r table3.1.1.7, echo=FALSE}
+u54_visit_fibrosis_24 <- u54_visit_fibrosis %>% 
+                         dplyr::filter(u54_visit_fibrosis$visit_type == "24 Months" &
+                                       (u54_visit_fibrosis$datediff_enroll_visit < 18 |    
+                                       u54_visit_fibrosis$datediff_enroll_visit > 30)) %>%
+                         dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_type, "Visit date" = visit_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_visit)
+# (Enrollment date - Visit date) IN MONTHS`
+kbl(u54_visit_fibrosis_24) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")  %>%
+  footnote(general = " 24 Months: Window for 24 months Follow-up visit is 18-30 months. Subjects whose visit date fall outside this window for a 24 month visit are displayed.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+```
+
+
+#### Missing 36 Months data {-}
+**_Table 3.1.1.8_**
+```{r table3.1.1.8, echo=FALSE}
+u54_visit_fibrosis_36m_miss <- u54_visit_fibrosis_36m_miss %>% dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_visit_fibrosis_36m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+ footnote(general = " 36 Months follow-up data is missing for these subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+
+#### 36 Months follow-up error {-}
+**_Table 3.1.1.9_**
+```{r table3.1.1.9, echo=FALSE}
+u54_visit_fibrosis_36 <- u54_visit_fibrosis %>% 
+                         dplyr::filter(u54_visit_fibrosis$visit_type == "36 Months" &
+                                       (u54_visit_fibrosis$datediff_enroll_visit < 30 |    
+                                       u54_visit_fibrosis$datediff_enroll_visit > 42)) %>%
+                         dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_type, "Visit date" = visit_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_visit)
+kbl(u54_visit_fibrosis_36) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+ footnote(general = " 36 Months: Window for 36 months Follow-up visit is 30-42 months. Subjects whose visit date fall outside this window for a 36 month visit are displayed.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+```
+
+#### Non-designated events {-}
+**_Table 3.1.1.10_**
+```{r table3.1.1.10, echo=FALSE}
+
+u54_visit_fibrosis_nonevent <-u54_visit_fibrosis_nonevent %>%
+                         dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_type, "Visit date" = visit_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_visit)
+kbl(u54_visit_fibrosis_nonevent, row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Date entered in non designated events for this instrument.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+
+
+``` 
+
+
+---
+
+
+### Cohort:HIV+/HCC+; HIV-/HCC+ {.tabset .tabset-pills}
+> Follow-up events: Baseline, 6 months, 12 months
+
++ There are `r u54_visit_hccpos_rec` subjects.
+  + `r nrow(subset(u54_visit_hccpos, (visit_type == "Baseline")))` out of `r length(unique(u54_visit_hccpos$record_id))` subjects have data for baseline visit.
+  + `r nrow(subset(u54_visit_hccpos, (visit_type == "6 Months")))` out of `r length(which(u54_visit_hccpos_due$months_6_due == 1))` subjects have data for 6 months follow-up visit.
+  + `r nrow(subset(u54_visit_hccpos, (visit_type == "12 Months")))` out of `r length(which(u54_visit_hccpos_due$months_12_due == 1))` subjects have data for 12 months follow-up visit.
+<!-- {-} next to the #### subheaders disables numbering in the tabs -->
+
+Tabs:
+
+<!-- + All Follow-up events: All records displayed for all Follow-up events. -->
++ **Missing Visit type/date**: `r nrow(u54_visit_hccpos_missviss)` subjects.
++ **Missing Baseline data**: `r nrow(u54_visit_hccpos_bl_miss)` subjects.
++ **Visit date error**: `r nrow(u54_visit_hccpos_b4enr)` subjects.
++ **6 Months Missing data**: `r nrow(u54_visit_hccpos_6m_due) - nrow(u54_visit_hccpos_6m)` subjects.
++ **6 Months follow-up error**: `r nrow(u54_visit_hccpos_6 <- u54_visit_hccpos %>% 
+                         dplyr::filter(u54_visit_hccpos$visit_type == "6 Months" &
+                                       (u54_visit_hccpos$datediff_enroll_visit < 0 |    
+                                       u54_visit_hccpos$datediff_enroll_visit > 12)))` subjects.
++ **12 Months Missing data**: `r nrow(u54_visit_hccpos_12m_due) - nrow(u54_visit_hccpos_12m)` subjects.
++ **12 Months  follow-up error**: `r nrow(u54_visit_hccpos_12 <- u54_visit_hccpos %>% 
+                         dplyr::filter(u54_visit_hccpos$visit_type == "12 Months" &
+                                       (u54_visit_hccpos$datediff_enroll_visit < 6 |    
+                                       u54_visit_hccpos$datediff_enroll_visit > 18)))` subjects.
++ **Non-designated events**: `r length(unique(u54_visit_hccpos_nonevent$record_id))` subjects.
+<!-- #### All Follow-up events {-} -->
+<!-- **_Table 3.1.2_** -->
+<!-- ```{r table3.1.2, echo=FALSE} -->
+<!-- kbl(u54_visit_hccpos) %>% kable_paper() %>% -->
+
+<!-- #row_spec(which((u54_visit_hccpos$redcap_baseline < u54_visit_hccpos$`Enrollment Date`) | (u54_visit_hccpos$redcap_6_months < u54_visit_hccpos$`Enrollment Date`) | #(u54_visit_hccpos$redcap_12_months < u54_visit_hccpos$`Enrollment Date`)), color = "white", background = "#D7261E") %>% -->
+<!--   kable_styling(bootstrap_options = "striped", full_width = FALSE) %>% -->
+<!--   scroll_box(width = "100%", height = "500px") -->
+<!-- ``` -->
+
+#### Missing Visit type/date {-}
+**_Table 3.1.2.1_**
+```{r table3.1.2.1, echo=FALSE}
+#u54_visit_hccpos_missviss <- subset(u54_visit_hccpos, ((is.na(visit_type) | (is.na(visit_d)))))
+
+u54_visit_hccpos_missviss <- u54_visit_hccpos_missviss %>%
+                         dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_type, "Visit date" = visit_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_visit)
+kbl(u54_visit_hccpos_missviss, escape = F, row.names = FALSE) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit type/date is missing for these subjects. There can be multiple rows per subject due to data missing in more than one instance.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### Missing Baseline data {-}
+**_Table 3.1.2.2_**
+```{r table3.1.2.2, echo=FALSE}
+
+u54_visit_hccpos_bl_miss <- u54_visit_hccpos_bl_miss %>% dplyr::rename("Record ID" = record_id,"U54 SubjectID" = enr_otherid)
+kbl(u54_visit_hccpos_bl_miss, escape = F) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Baseline data is missing for these subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+
+```
+
+#### Visit date error {-}
+**_Table 3.1.2.3_**
+```{r table3.1.2.3, echo=FALSE}
+
+u54_visit_hccpos_b4enr <- u54_visit_hccpos_b4enr  %>%
+                         dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_type, "Visit date" = visit_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_visit)
+kbl(u54_visit_hccpos_b4enr, row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit date entered is prior to Enrollment date.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+``` 
+
+#### 6 Months Missing data {-}
+**_Table 3.1.2.4_**
+```{r table3.1.2.4, echo=FALSE}
+u54_visit_hccpos_6m_miss <- u54_visit_hccpos_6m_miss %>%
+                         dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+
+kbl(u54_visit_hccpos_6m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 6 Months follow-up data is missing for these subjects. ", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 6 Months follow-up error {-}
+**_Table 3.1.2.5_**
+```{r table3.1.2.5, echo=FALSE}
+u54_visit_hccpos_6 <- u54_visit_hccpos %>% 
+                         dplyr::filter(u54_visit_hccpos$visit_type == "6 Months" &
+                                       (u54_visit_hccpos$datediff_enroll_visit < 0 |    
+                                       u54_visit_hccpos$datediff_enroll_visit > 12)) %>%
+                         dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_type, "Visit date" = visit_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_visit)
+kbl(u54_visit_hccpos_6) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 6 Months: Window for 6 months Follow-up visit is 0-12 months. Subjects whose visit date fall outside this window for a 6 month visit are displayed. ", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 12 Months Missing data {-}
+**_Table 3.1.2.6_**
+```{r table3.1.2.6, echo=FALSE}
+u54_visit_hccpos_12m_miss <- u54_visit_hccpos_12m_miss %>%
+                         dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_visit_hccpos_12m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 12 Months follow-up data is missing for these subjects. ", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 12 Months follow-up error{-}
+**_Table 3.1.2.7_**
+```{r table3.1.2.7, echo=FALSE}
+u54_visit_hccpos_12 <- u54_visit_hccpos %>% 
+                         dplyr::filter(u54_visit_hccpos$visit_type == "12 Months" &
+                                       (u54_visit_hccpos$datediff_enroll_visit < 6 |    
+                                       u54_visit_hccpos$datediff_enroll_visit > 18)) %>%
+                         dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_type, "Visit date" = visit_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_visit)
+kbl(u54_visit_hccpos_12) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 12 Months: Window for 12 months Follow-up visit is 6-18 months. Subjects whose visit date fall outside this window for a 12 month visit are displayed. ", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### Non-designated events {-}
+**_Table 3.1.2.8_**
+```{r table3.1.2.8, echo=FALSE}
+u54_visit_hccpos_nonevent <- u54_visit_hccpos_nonevent %>%
+                         dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_type, "Visit date" = visit_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_visit)
+kbl(u54_visit_hccpos_nonevent) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Date entered in non designated events for this instrument.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+``` 
+
+
+---
+
+
+### Cohort: HIV+/HCC-  {.tabset .tabset-pills}
+> Follow-up events: Baseline
+
++ There are `r u54_visit_hccneg_rec` subjects.
+  + `r nrow(subset(u54_visit_hccneg, (visit_type == "Baseline")))` out of  `r length(unique(u54_visit_hccneg$record_id))` subjects have data for baseline visit.
+
+Tabs:
+
+<!-- + All Follow-up events: All records displayed for all Follow-up events. -->
++ **Missing Visit type/date**: `r nrow(u54_visit_hccneg_missviss)` subjects.
++ **Missing Baseline data**: `r nrow(u54_visit_hccneg_bl_miss)` subjects.
++ **Visit date error**: `r nrow(u54_visit_hccneg_b4enr)` subjects.
++ **Non-designated events**: `r length(unique(u54_visit_hccneg_nonevent$record_id))` subjects.
+
+<!-- #### All Follow-up events {-} -->
+<!-- **_Table 3.1.3_** -->
+<!-- ```{r table3.1.3, echo=FALSE} -->
+<!-- kbl(u54_visit_hccneg) %>% kable_paper() %>% -->
+<!--   #row_spec(which((u54_visit_hccneg$redcap_baseline < u54_visit_hccneg$`Enrollment Date`)), color = "white", background = "#D7261E") %>% -->
+<!--   kable_styling(bootstrap_options = "striped", full_width = FALSE) %>% -->
+<!--   scroll_box(width = "100%", height = "500px") -->
+<!-- ``` -->
+
+#### Missing Visit type/date {-}
+**_Table 3.1.3.1_**
+```{r table3.1.3.1, echo=FALSE}
+#u54_visit_hccneg_missviss <- subset(u54_visit_hccneg, ((is.na(visit_type) | (is.na(visit_d)))))
+
+u54_visit_hccneg_missviss <- u54_visit_hccneg_missviss %>%
+                         dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_type, "Visit date" = visit_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_visit)
+kbl(u54_visit_hccneg_missviss, escape = F, row.names = FALSE) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit type/date is missing for these subjects. There can be multiple rows per subject due to data missing in more than one instance.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+
+#### Missing Baseline data {-}
+**_Table 3.1.3.2_**
+```{r table3.1.3.2, echo=FALSE}
+u54_visit_hccneg_bl_miss <- u54_visit_hccneg_bl_miss %>%
+                         dplyr::rename("Record ID" = record_id,  "U54 SubjectID" = enr_otherid)
+kbl(u54_visit_hccneg_bl_miss, escape = F) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Baseline data is missing for these subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### Visit date error {-}
+**_Table 3.1.3.3_**
+```{r table3.1.3.3, echo=FALSE}
+
+ u54_visit_hccneg_b4enr <- u54_visit_hccneg_b4enr %>%
+                         dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_type, "Visit date" = visit_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_visit)
+kbl(u54_visit_hccneg_b4enr) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit date entered is prior to Enrollment date.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+``` 
+
+#### Non-designated events {-}
+**_Table 3.1.3.4_**
+```{r table3.1.3.4, echo=FALSE}
+u54_visit_hccneg_nonevent <- u54_visit_hccneg_nonevent %>%
+                         dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_type, "Visit date" = visit_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_visit)
+
+kbl(u54_visit_hccneg_nonevent, row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Date entered in non designated events for this instrument.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+``` 
+
+### {.unlisted .unnumbered}
+
+<br>
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+<br>
+
+
+## Visit-HIV form
+### Cohort: HIV+/Fibrosis {.tabset .tabset-pills}
+> Follow-up events: 6 months, 12 months, 18 months, 24 months, 30 months, 36 months
+
++ There are `r u54_hivvisit_fibrosis_rec` subjects.
+
+  + `r nrow(subset(u54_hivvisit_select,(visit_hiv_type == "6 Months")))` out of `r length(which(u54_hivvisit_select_due$months_6_due == 1))` subjects have data for 6 months follow-up visit.
+  + `r nrow(subset(u54_hivvisit_select,(visit_hiv_type == "12 Months")))` out of `r length(which(u54_hivvisit_select_due$months_12_due == 1))` subjects have data for 12 months follow-up visit.
+  + `r nrow(subset(u54_hivvisit_select,(visit_hiv_type == "18 Months")))` out of `r length(which(u54_hivvisit_select_due$months_18_due == 1))` subjects have data for 18 months follow-up visit.
+  + `r nrow(subset(u54_hivvisit_select,(visit_hiv_type == "24 Months")))` out of `r length(which(u54_hivvisit_select_due$months_24_due == 1))` subjects have data for 24 months follow-up visit.
+  + `r nrow(subset(u54_hivvisit_select,(visit_hiv_type == "30 Months")))` out of `r length(which(u54_hivvisit_select_due$months_30_due == 1))` subjects have data for 30 months follow-up visit.
+  + `r nrow(subset(u54_hivvisit_select,(visit_hiv_type == "36 Months")))` out of `r length(which(u54_hivvisit_select_due$months_36_due == 1))` subjects have data for 36 months follow-up visit.
+
+
+Tabs:
+
++ **Missing Visit type/date**: `r nrow(u54_hivvisit_select_missviss)` subjects.
++ **Visit date error**: `r nrow(u54_hivvisit_select_b4enr)` subjects.
++ **6 Months Missing data**: `r nrow(u54_hivvisit_select_6m_due) - nrow(u54_hivvisit_select_6m)` subjects.
++ **6 Months follow-up error**: `r nrow(u54_hivvisit_select_6 <- u54_hivvisit_select %>% dplyr::filter((u54_hivvisit_select$visit_hiv_type == "6 Months") & (u54_hivvisit_select$datediff_enroll_hivvisit < 0 | u54_hivvisit_select$datediff_enroll_hivvisit > 12)))` subjects.
++ **12 Months Missing data**: `r nrow(u54_hivvisit_select_12m_due) - nrow(u54_hivvisit_select_12m)` subjects.
++ **12 Months follow-up error**: `r nrow(u54_hivvisit_select_12 <- u54_hivvisit_select %>% dplyr::filter((u54_hivvisit_select$visit_hiv_type == "12 Months") & (u54_hivvisit_select$datediff_enroll_hivvisit < 6 | u54_hivvisit_select$datediff_enroll_hivvisit > 18)))` subjects.
++ **18 Months Missing data**: `r nrow(u54_hivvisit_select_18m_due) - nrow(u54_hivvisit_select_18m)` subjects.
++ **18 Months follow-up error**: `r nrow(u54_hivvisit_select_18 <- u54_hivvisit_select %>% dplyr::filter((u54_hivvisit_select$visit_hiv_type == "18 Months") & (u54_hivvisit_select$datediff_enroll_hivvisit < 12 | u54_hivvisit_select$datediff_enroll_hivvisit > 24)))` subjects.
++ **24 Months Missing data**: `r nrow(u54_hivvisit_select_24m_due) - nrow(u54_hivvisit_select_24m)` subjects.
++ **24 Months follow-up error**: `r nrow(u54_hivvisit_select_24 <- u54_hivvisit_select %>% dplyr::filter((u54_hivvisit_select$visit_hiv_type == "24 Months") & (u54_hivvisit_select$datediff_enroll_hivvisit < 18 | u54_hivvisit_select$datediff_enroll_hivvisit > 30)))` subjects.
++ **30 Months Missing data**: `r nrow(u54_hivvisit_select_30m_due) - nrow(u54_hivvisit_select_30m)` subjects.
++ **30 Months follow-up error**: `r nrow(u54_hivvisit_select_30 <- u54_hivvisit_select %>% dplyr::filter((u54_hivvisit_select$visit_hiv_type == "30 Months") & (u54_hivvisit_select$datediff_enroll_hivvisit < 24 | u54_hivvisit_select$datediff_enroll_hivvisit > 36)))` subjects.
++ **36 Months Missing data**: `r nrow(u54_hivvisit_select_36m_due) - nrow(u54_hivvisit_select_36m)` subjects.
++ **36 Months follow-up error**: `r nrow(u54_hivvisit_select_36 <- u54_hivvisit_select %>% dplyr::filter((u54_hivvisit_select$visit_hiv_type == "36 Months") & (u54_hivvisit_select$datediff_enroll_hivvisit < 30 | u54_hivvisit_select$datediff_enroll_hivvisit  > 42)))` subjects.
+
+#### Missing Visit type/date {-}
+**_Table 3.2.1.1_**
+```{r table3.2.1.1, echo=FALSE}
+u54_hivvisit_select_missviss <- u54_hivvisit_select_missviss  %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_hiv_type, "Visit date" = visit_hiv_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_hivvisit)
+#u54_hivvisit_select_missviss <- subset(u54_hivvisit_select, ((is.na(visit_hiv_type) | (is.na(visit_hiv_d)))))
+kbl(u54_hivvisit_select_missviss, escape = F, row.names = FALSE) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit type/date is missing for these subjects. There can be multiple rows per subject due to data missing in more than one instance.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### Visit date error {-}
+**_Table 3.2.1.2_**
+```{r table3.2.1.2, echo=FALSE}
+
+u54_hivvisit_select_b4enr <- u54_hivvisit_select_b4enr %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_hiv_type, "Visit date" = visit_hiv_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_hivvisit)
+kbl(u54_hivvisit_select_b4enr) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit date entered is prior to Enrollment date.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+``` 
+
+#### 6 Months Missing data {-}
+**_Table 3.2.1.3_**
+```{r table3.2.1.3, echo=FALSE}
+
+u54_hivvisit_select_6m_miss <- u54_hivvisit_select_6m_miss %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_hivvisit_select_6m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 6 Months follow-up data is missing for this subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 6 Months follow-up error {-}
+**_Table 3.2.1.4_**
+```{r table3.2.1.4, echo=FALSE}
+u54_hivvisit_select_6 <- u54_hivvisit_select %>%
+                         dplyr::filter(u54_hivvisit_select$visit_hiv_type == "6 Months" &
+                         (u54_hivvisit_select$datediff_enroll_hivvisit < 0 |
+                          u54_hivvisit_select$datediff_enroll_hivvisit > 12)) %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_hiv_type, "Visit date" = visit_hiv_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_hivvisit)
+kbl(u54_hivvisit_select_6) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 6 Months: Window for 6 months Follow-up visit is 0-12 months. Subjects whose visit date fall outside this window for a 6 month visit are displayed.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 12 Months Missing data {-}
+**_Table 3.2.1.5_**
+```{r table3.2.1.5, echo=FALSE}
+u54_hivvisit_select_12m_miss <- u54_hivvisit_select_12m_miss %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_hivvisit_select_12m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 12 Months follow-up data is missing for this subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 12 Months follow-up error {-}
+**_Table 3.2.1.6_**
+```{r table3.2.1.6, echo=FALSE}
+u54_hivvisit_select_12 <- u54_hivvisit_select %>%
+                          dplyr::filter((u54_hivvisit_select$visit_hiv_type == "12 Months") &
+                          (u54_hivvisit_select$datediff_enroll_hivvisit < 6 |
+                          u54_hivvisit_select$datediff_enroll_hivvisit > 18)) %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_hiv_type, "Visit date" = visit_hiv_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_hivvisit)
+kbl(u54_hivvisit_select_12) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 12 Months: Window for 12 months Follow-up visit is 6-18 months. Subjects whose visit date fall outside this window for a 12 month visit are displayed.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 18 Months Missing data {-}
+**_Table 3.2.1.7_**
+```{r table3.2.1.7, echo=FALSE}
+
+u54_hivvisit_select_18m_miss <- u54_hivvisit_select_18m_miss %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_hivvisit_select_18m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 18 Months follow-up data is missing for this subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 18 Months follow-up error {-}
+**_Table 3.2.1.8_**
+```{r table3.2.1.8, echo=FALSE}
+u54_hivvisit_select_18 <- u54_hivvisit_select %>%
+                          dplyr::filter((u54_hivvisit_select$visit_hiv_type == "18 Months") &
+                          (u54_hivvisit_select$datediff_enroll_hivvisit < 12 |
+                           u54_hivvisit_select$datediff_enroll_hivvisit > 24)) %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_hiv_type, "Visit date" = visit_hiv_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_hivvisit)
+kbl(u54_hivvisit_select_18) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+ footnote(general = " 18 Months: Window for 18 months Follow-up visit is 12-24 months. Subjects whose visit date fall outside this window for a 18 month visit are displayed.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 24 Months Missing data {-}
+**_Table 3.2.1.9_**
+```{r table3.2.1.9, echo=FALSE}
+u54_hivvisit_select_24m_miss <- u54_hivvisit_select_24m_miss %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_hivvisit_select_24m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 24 Months follow-up data is missing for this subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 24 Months follow-up error {-}
+**_Table 3.2.1.10_**
+```{r table3.2.1.10, echo=FALSE}
+u54_hivvisit_select_24 <- u54_hivvisit_select %>%
+                          dplyr::filter((u54_hivvisit_select$visit_hiv_type == "24 Months") &
+                          (u54_hivvisit_select$datediff_enroll_hivvisit < 18 |
+                           u54_hivvisit_select$datediff_enroll_hivvisit > 30)) %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_hiv_type, "Visit date" = visit_hiv_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_hivvisit)
+kbl(u54_hivvisit_select_24) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")  %>%
+  footnote(general = " 24 Months: Window for 24 months Follow-up visit is 18-30 months. Subjects whose visit date fall outside this window for a 24 month visit are displayed.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 30 Months Missing data {-}
+**_Table 3.2.1.11_**
+```{r table3.2.1.11, echo=FALSE}
+u54_hivvisit_select_30m_miss <- u54_hivvisit_select_30m_miss %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_hivvisit_select_30m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 30 Months follow-up data is missing for this subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 30 Months follow-up error {-}
+**_Table 3.2.1.12_**
+```{r table3.2.1.12, echo=FALSE}
+u54_hivvisit_select_30 <- u54_hivvisit_select %>%
+                          dplyr::filter((u54_hivvisit_select$visit_hiv_type == "30 Months") &
+                          (u54_hivvisit_select$datediff_enroll_hivvisit < 24 |
+                           u54_hivvisit_select$datediff_enroll_hivvisit > 36)) %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_hiv_type, "Visit date" = visit_hiv_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_hivvisit)
+kbl(u54_hivvisit_select_30) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+ footnote(general = " 30 Months: Window for 30 months Follow-up visit is 24-36 months. Subjects whose visit date fall outside this window for a 30 month visit are displayed.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 36 Months Missing data {-}
+**_Table 3.2.1.13_**
+```{r table3.2.1.13, echo=FALSE}
+u54_hivvisit_select_36m_miss <- u54_hivvisit_select_36m_miss %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_hivvisit_select_36m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 36 Months follow-up data is missing for this subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 36 Months follow-up error {-}
+**_Table 3.2.1.14_**
+```{r table3.2.1.14, echo=FALSE}
+u54_hivvisit_select_36 <- u54_hivvisit_select %>%
+                          dplyr::filter((u54_hivvisit_select$visit_hiv_type == "36 Months") &
+                          (u54_hivvisit_select$datediff_enroll_hivvisit < 30 |
+                          u54_hivvisit_select$datediff_enroll_hivvisit  > 42)) %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_hiv_type, "Visit date" = visit_hiv_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_hivvisit)
+kbl(u54_hivvisit_select_36) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+ footnote(general = " 36 Months: Window for 36 months Follow-up visit is 30-42 months. Subjects whose visit date fall outside this window for a 36 month visit are displayed.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+
+### {.unlisted .unnumbered}
+
+<br>
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+<br>
+
+
+## Visit-HCC form
+### Cohort: HIV+/HCC+;HIV-/HCC+ {.tabset .tabset-pills}
+> Follow-up events: 6 months, 12 months
+
++ There are `r u54_hccvisit_select_rec` subjects.
+  + `r nrow(subset(u54_hccvisit_select,(visit_hcc_type == "6 Months")))` out of `r length(which(u54_hccvisit_select_due$months_6_due == 1))` subjects have data for 6 months follow-up visit.
+  + `r nrow(subset(u54_hccvisit_select,(visit_hcc_type == "12_months")))` out of `r length(which(u54_hccvisit_select_due$months_12_due == 1))` subjects have data for 12 month follow-up visit.
+
+Tabs:
+
++ **Missing Visit type/date**: `r nrow(u54_hccvisit_select_missviss)` subjects.
++ **Visit date error**: `r nrow(u54_hccvisit_select_b4enr)` subjects.
++ **6 Months Missing data**: `r nrow(u54_hccvisit_select_6m_due) - nrow(u54_hccvisit_select_6m)` subjects.
++ **6 Months follow-up error**: `r nrow(u54_hccvisit_select_6 <- u54_hccvisit_select %>% dplyr::filter((u54_hccvisit_select$visit_hcc_type == "6 Months") & (u54_hccvisit_select$datediff_enroll_hccvisit < 0 | u54_hccvisit_select$datediff_enroll_hccvisit > 12)))` subjects.
++ **12 Months Missing data**: `r nrow(u54_hccvisit_select_12m_due) - nrow(u54_hccvisit_select_12m)` subjects.
++ **12 Months follow-up error**: `r nrow(u54_hccvisit_select_12 <- u54_hccvisit_select %>% dplyr::filter((u54_hccvisit_select$visit_hcc_type == "12 Months") & (u54_hccvisit_select$datediff_enroll_hccvisit < 6 | u54_hccvisit_select$datediff_enroll_hccvisit > 18)))` subjects.
++ **Non-designated events**: `r length(unique(u54_hccvisit_select_nonevent$record_id))` subjects.
+
+<!-- #### All Follow-up events {-} -->
+<!-- **_Table 3.3.1_** -->
+<!-- ```{r table3.3.1, echo=FALSE} -->
+
+<!-- kbl(u54_hccvisit_select, escape = F) %>% kable_paper() %>% -->
+<!-- kable_styling(bootstrap_options = "striped", full_width = FALSE) %>% -->
+<!-- scroll_box(width = "100%", height = "500px") -->
+<!-- ``` -->
+
+#### Missing Visit type/date {-}
+**_Table 3.3.1.1_**
+```{r table3.3.1.1, echo=FALSE}
+u54_hccvisit_select_missviss <- u54_hccvisit_select_missviss %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_hcc_type, "Visit date" = visit_hcc_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_hccvisit)
+#u54_hccvisit_select_missviss <- subset(u54_hccvisit_select, ((is.na(visit_hcc_type) | (is.na(visit_hcc_d)))))
+kbl(u54_hccvisit_select_missviss, escape = F) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit type/date is missing for these subjects. There can be multiple rows per subject due to data missing in more than one instance.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+
+#### Visit date error {-}
+**_Table 3.3.1.2_**
+```{r table3.3.1.2, echo=FALSE}
+
+u54_hccvisit_select_b4enr <- u54_hccvisit_select_b4enr %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_hcc_type, "Visit date" = visit_hcc_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_hccvisit)
+kbl(u54_hccvisit_select_b4enr) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit date entered is prior to Enrollment date.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+``` 
+
+#### 6 Months Missing data{-}
+**_Table 3.3.1.3_**
+```{r table3.3.1.3, echo=FALSE}
+u54_hccvisit_select_6m_miss <- u54_hccvisit_select_6m_miss %>% dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_hccvisit_select_6m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 6 Months follow-up data is missing for these subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+```
+
+#### 6 Months follow-up error{-}
+**_Table 3.3.1.4_**
+```{r table3.3.1.4, echo=FALSE}
+u54_hccvisit_select_6 <- u54_hccvisit_select %>% 
+                         dplyr::filter((u54_hccvisit_select$visit_hcc_type == "6 Months") & 
+                                         (u54_hccvisit_select$datediff_enroll_hccvisit < 0 | u54_hccvisit_select$datediff_enroll_hccvisit > 12)) %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_hcc_type, "Visit date" = visit_hcc_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_hccvisit)
+kbl(u54_hccvisit_select_6) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 6 Months: Window for 6 months Follow-up visit is 0-12 months. Subjects whose visit date fall outside this window for a 6 month visit are displayed.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+```
+
+#### 12 Months Missing data{-}
+**_Table 3.3.1.5_**
+```{r table3.3.1.5, echo=FALSE}
+
+u54_hccvisit_select_12m_miss <- u54_hccvisit_select_12m_miss %>% dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_hccvisit_select_12m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 12 Months follow-up data is missing for these subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+```
+
+#### 12 Months follow-up error {-}
+**_Table 3.3.1.6_**
+```{r table3.3.1.6, echo=FALSE}
+u54_hccvisit_select_12 <- u54_hccvisit_select %>% dplyr::filter((u54_hccvisit_select$visit_hcc_type == "12 Months") & (u54_hccvisit_select$datediff_enroll_hccvisit < 6 | u54_hccvisit_select$datediff_enroll_hccvisit > 18)) %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_hcc_type, "Visit date" = visit_hcc_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_hccvisit)
+kbl(u54_hccvisit_select_12) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 12 Months: Window for 12 months Follow-up visit is 6-18 months. Subjects whose visit date fall outside this window for a 12 month visit are displayed.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+```
+
+
+#### Non-designated events {-}
+**_Table 3.3.1.7_**
+```{r table3.3.1.7, echo=FALSE}
+ u54_hccvisit_select_nonevent <- u54_hccvisit_select_nonevent %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_hcc_type, "Visit date" = visit_hcc_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_hccvisit)
+kbl(u54_hccvisit_select_nonevent, row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Date entered in non designated events for this instrument.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+``` 
+
+
+
+### {.unlisted .unnumbered}
+
+<br>
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+<br>
+
+
+## Laboratory Testing Results
+### Cohort: HIV+/Fibrosis  {.tabset .tabset-pills}
+> Follow-up events: Baseline, 12 months, 24 months, 36 months
+
++ There are `r u54_labvisit_fibrosis_rec` subjects.
+  + `r nrow(subset(u54_labvisit_fibrosis, (visit_lab_type == "Baseline")))` out of `r length(unique(u54_labvisit_fibrosis$record_id))` subjects have data for baseline visit.
+  + `r nrow(subset(u54_labvisit_fibrosis, (visit_lab_type == "12 Months")))` out of `r length(which(u54_labvisit_fibrosis_due$months_12_due == 1))` subjects have data for 12 months follow-up visit.
+  + `r nrow(subset(u54_labvisit_fibrosis, (visit_lab_type == "24 Months")))` out of `r length(which(u54_labvisit_fibrosis_due$months_24_due == 1))` subjects have data for 24 months follow-up visit.
+  + `r nrow(subset(u54_labvisit_fibrosis, (visit_lab_type == "36 Months")))`  out of `r length(which(u54_labvisit_fibrosis_due$months_36_due == 1))` subjects have data for 36 months follow-up visit.
+
+
+Tabs:
+
+<!-- + All Follow-up events: All records displayed for all Follow-up events. -->
++ **Missing Visit type/date**: `r nrow(u54_labvisit_fibrosis_missviss)` subjects.
++ **Missing Baseline data**: `r nrow(u54_labvisit_fibrosis_bl_miss)` subjects.
++ **Visit date error**: `r nrow(u54_labvisit_fibrosis_b4enr)` subjects.
++ **12 Months Missing data**: `r nrow(u54_labvisit_fibrosis_12m_due) - nrow(u54_labvisit_fibrosis_12m)` subjects.
++ **12 Months follow-up error**: `r nrow(u54_labvisit_fibrosis_12 <- u54_labvisit_fibrosis %>% 
+                         dplyr::filter(u54_labvisit_fibrosis$visit_lab_type == "12 Months" &
+                                       (u54_labvisit_fibrosis$datediff_enroll_labvisit < 6 |    
+                                       u54_labvisit_fibrosis$datediff_enroll_labvisit > 18)))` subjects.
++ **24 Months Missing data**: `r nrow(u54_labvisit_fibrosis_24m_due) - nrow(u54_labvisit_fibrosis_24m)` subjects.
++ **24 Months  follow-up error**: `r nrow(u54_labvisit_fibrosis_24 <- u54_labvisit_fibrosis %>% 
+                         dplyr::filter(u54_labvisit_fibrosis$visit_lab_type == "24 Months" &
+                                       (u54_labvisit_fibrosis$datediff_enroll_labvisit < 18 |    
+                                       u54_labvisit_fibrosis$datediff_enroll_labvisit > 30)))` subjects.
++ **36 Months Missing data**: `r nrow(u54_labvisit_fibrosis_36m_due) - nrow(u54_labvisit_fibrosis_36m)` subjects.
++ **36 Months follow-up error**: `r nrow(u54_labvisit_fibrosis_36 <- u54_labvisit_fibrosis %>% 
+                         dplyr::filter(u54_labvisit_fibrosis$visit_lab_type == "36 Months" &
+                                       (u54_labvisit_fibrosis$datediff_enroll_labvisit < 30 |    
+                                       u54_labvisit_fibrosis$datediff_enroll_labvisit > 42)))` subjects.
++ **Non-designated events**: `r length(unique(u54_labvisit_fibrosis_nonevent$record_id))` subjects.
+
+<!-- #### All Follow-up events {-} -->
+<!-- **_Table 3.4.1_** -->
+<!-- ```{r table3.4.1, echo=FALSE} -->
+<!-- kbl(u54_labvisit_fibrosis) %>% kable_paper() %>% -->
+<!--   kable_styling(bootstrap_options = "striped", full_width = FALSE) %>% -->
+<!--   scroll_box(width = "100%", height = "500px") -->
+<!-- ``` -->
+#### Missing Visit type/date {-}
+**_Table 3.4.1.1_**
+```{r table3.4.1.1, echo=FALSE}
+#u54_labvisit_fibrosis_missviss <- subset(u54_labvisit_fibrosis, ((is.na(visit_lab_type) | (is.na(visit_lab_d)))))
+#u54_labvisit_fibrosis_missviss2 <- subset(u54_labvisit_fibrosis, (is.na(visit_lab_type)))
+
+u54_labvisit_fibrosis_missviss <- u54_labvisit_fibrosis_missviss %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_lab_type, "Visit date" = visit_lab_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_labvisit)
+kbl(u54_labvisit_fibrosis_missviss, escape = F, row.names = FALSE) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit type/date is missing for these subjects. There can be multiple rows per subject due to data missing in more than one instance.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### Missing Baseline data {-}
+**_Table 3.4.1.2_**
+```{r table3.4.1.2, echo=FALSE}
+
+u54_labvisit_fibrosis_bl_miss <- u54_labvisit_fibrosis_bl_miss %>%
+                          dplyr::rename("Record ID" = record_id,"U54 SubjectID" = enr_otherid)
+kbl(u54_labvisit_fibrosis_bl_miss, escape = F) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Baseline data is missing for these subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### Visit date error {-}
+**_Table 3.4.1.3_**
+```{r table3.4.1.3, echo=FALSE}
+
+ u54_labvisit_fibrosis_b4enr <- u54_labvisit_fibrosis_b4enr %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_lab_type, "Visit date" = visit_lab_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_labvisit)
+kbl(u54_labvisit_fibrosis_b4enr, row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit date entered is prior to Enrollment date.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+``` 
+
+#### 12 Months Missing data {-}
+**_Table 3.4.1.4_**
+```{r table3.4.1.4, echo=FALSE}
+u54_labvisit_fibrosis_12m_miss <- u54_labvisit_fibrosis_12m_miss %>% dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_labvisit_fibrosis_12m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 12 Months follow-up data is missing for these subjects. ", footnote_as_chunk = T, title_format = c("italic", "underline"))
+ 
+```
+
+#### 12 Months follow-up error {-}
+**_Table 3.4.1.5_**
+```{r table3.4.1.5, echo=FALSE}
+u54_labvisit_fibrosis_12 <- u54_labvisit_fibrosis %>% 
+                         dplyr::filter(u54_labvisit_fibrosis$visit_lab_type == "12 Months" &
+                                       (u54_labvisit_fibrosis$datediff_enroll_labvisit < 6 |    
+                                       u54_labvisit_fibrosis$datediff_enroll_labvisit > 18)) %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_lab_type, "Visit date" = visit_lab_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_labvisit)
+kbl(u54_labvisit_fibrosis_12) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 12 Months: Window for 12 months Follow-up visit is 6-18 months. Subjects whose visit date fall outside this window for a 12 month visit are displayed. ", footnote_as_chunk = T, title_format = c("italic", "underline"))
+ 
+```
+
+#### 24 Months Missing data {-}
+**_Table 3.4.1.6_**
+```{r table3.4.1.6, echo=FALSE}
+u54_labvisit_fibrosis_24m_miss <- u54_labvisit_fibrosis_24m_miss %>% dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+# (Enrollment date - Visit date) IN MONTHS`
+kbl(u54_labvisit_fibrosis_24m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")  %>%
+  footnote(general = " 24 Months follow-up data is missing for these subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+```
+
+
+#### 24 Months follow-up error {-}
+**_Table 3.4.1.7_**
+```{r table3.4.1.7, echo=FALSE}
+u54_labvisit_fibrosis_24 <- u54_labvisit_fibrosis %>% 
+                         dplyr::filter(u54_labvisit_fibrosis$visit_lab_type == "24 Months" &
+                                       (u54_labvisit_fibrosis$datediff_enroll_labvisit < 18 |    
+                                       u54_labvisit_fibrosis$datediff_enroll_labvisit > 30)) %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_lab_type, "Visit date" = visit_lab_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_labvisit)
+# (Enrollment date - Visit date) IN MONTHS`
+kbl(u54_labvisit_fibrosis_24) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px")  %>%
+  footnote(general = " 24 Months: Window for 24 months Follow-up visit is 18-30 months. Subjects whose visit date fall outside this window for a 24 month visit are displayed.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+```
+
+#### 36 Months Missing data {-}
+**_Table 3.4.1.8_**
+```{r table3.4.1.8, echo=FALSE}
+u54_labvisit_fibrosis_36m_miss <- u54_labvisit_fibrosis_36m_miss %>% dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_labvisit_fibrosis_36m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+ footnote(general = " 36 Months follow-up data is missing for these subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+```
+
+#### 36 Months follow-up error {-}
+**_Table 3.4.1.9_**
+```{r table3.4.1.9, echo=FALSE}
+u54_labvisit_fibrosis_36 <- u54_labvisit_fibrosis %>% 
+                         dplyr::filter(u54_labvisit_fibrosis$visit_lab_type == "36 Months" &
+                                       (u54_labvisit_fibrosis$datediff_enroll_labvisit < 30 |    
+                                       u54_labvisit_fibrosis$datediff_enroll_labvisit > 42)) %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_lab_type, "Visit date" = visit_lab_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_labvisit)
+kbl(u54_labvisit_fibrosis_36) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+ footnote(general = " 36 Months: Window for 36 months Follow-up visit is 30-42 months. Subjects whose visit date fall outside this window for a 36 month visit are displayed.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+```
+
+#### Non-designated events {-}
+**_Table 3.4.1.10_**
+```{r table3.4.1.10, echo=FALSE}
+u54_labvisit_fibrosis_nonevent <- u54_labvisit_fibrosis_nonevent %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_lab_type, "Visit date" = visit_lab_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_labvisit)
+kbl(u54_labvisit_fibrosis_nonevent, row.names = FALSE) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Date entered in non designated events for this instrument.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+``` 
+
+
+---
+
+
+### Cohort: HIV+/HCC+;HIV-/HCC+ {.tabset .tabset-pills}
+> Follow-up events: Baseline, 6 months, 12 months
+
++ There are `r u54_labvisit_hccpos_rec` subjects.
+  + `r nrow(subset(u54_labvisit_hccpos, (visit_lab_type == "Baseline")))` out of `r length(unique(u54_labvisit_hccpos$record_id))` subjects have data for baseline visit.
+  + `r nrow(subset(u54_labvisit_hccpos, (visit_lab_type == "6 Months")))` out of `r length(which(u54_labvisit_hccpos_due$months_6_due == 1))` subjects have data for 6 months follow-up visit.
+  + `r nrow(subset(u54_labvisit_hccpos, (visit_lab_type == "12 Months")))` out of `r length(which(u54_labvisit_hccpos_due$months_12_due == 1))` subjects have data for 12 months follow-up visit.
+
+Tabs:
+
+<!-- + All Follow-up events: All records displayed for all Follow-up events. -->
++ **Missing Visit type/date**: `r nrow(u54_labvisit_hccpos_missviss)` subjects.
++ **Missing Baseline data**: `r nrow(u54_labvisit_hccpos_bl_miss)` subjects.
++ **Visit date prior to enrollment date**: `r nrow(u54_labvisit_hccpos_b4enr)` subjects.
++ **6 Months Missing data**: `r nrow(u54_labvisit_hccpos_6m_due) - nrow(u54_labvisit_hccpos_6m)` subjects.
++ **6 Months follow-up error**: `r nrow(u54_labvisit_hccpos_6 <- u54_labvisit_hccpos %>% 
+                         dplyr::filter(u54_labvisit_hccpos$visit_lab_type == "6 Months" &
+                                       (u54_labvisit_hccpos$datediff_enroll_labvisit < 0 |    
+                                       u54_labvisit_hccpos$datediff_enroll_labvisit > 12)))` subjects.
++ **12 Months Missing data**: `r nrow(u54_labvisit_hccpos_12m_due) - nrow(u54_labvisit_hccpos_12m)` subjects.
++ **12 Months  follow-up error**: `r nrow(u54_labvisit_hccpos_12 <- u54_labvisit_hccpos %>% 
+                         dplyr::filter(u54_labvisit_hccpos$visit_lab_type == "12 Months" &
+                                       (u54_labvisit_hccpos$datediff_enroll_labvisit < 6 |    
+                                       u54_labvisit_hccpos$datediff_enroll_labvisit > 18)))` subjects.
++ **Non-designated events**: `r length(unique(u54_labvisit_hccpos_nonevent$record_id))` subjects.
+
+<!-- #### All Follow-up events {-} -->
+<!-- **_Table 3.4.2_** -->
+<!-- ```{r table3.4.2, echo=FALSE} -->
+<!-- kbl(u54_labvisit_hccpos) %>% kable_paper() %>% -->
+<!--   kable_styling(bootstrap_options = "striped", full_width = FALSE) %>% -->
+<!--   scroll_box(width = "100%", height = "500px") -->
+<!-- ``` -->
+
+#### Missing Visit type/date {-}
+**_Table 3.4.2.1_**
+```{r table3.4.2.1, echo=FALSE}
+#u54_labvisit_hccpos_missviss <- subset(u54_labvisit_hccpos, ((is.na(visit_lab_type) | (is.na(visit_lab_d)))))
+u54_labvisit_hccpos_missviss <- u54_labvisit_hccpos_missviss %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_lab_type, "Visit date" = visit_lab_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_labvisit)
+
+kbl(u54_labvisit_hccpos_missviss, escape = F, row.names = FALSE) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit type/date is missing for these subjects. There can be multiple rows per subject due to data missing in more than one instance.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### Missing Baseline data {-}
+**_Table 3.4.2.2_**
+```{r table3.4.2.2, echo=FALSE}
+ u54_labvisit_hccpos_bl_miss <- u54_labvisit_hccpos_bl_miss %>%
+                          dplyr::rename("Record ID" = record_id, "U54 SubjectID" = enr_otherid)
+kbl(u54_labvisit_hccpos_bl_miss, escape = F) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Baseline data is missing for these subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+
+```
+
+#### Visit date error {-}
+**_Table 3.4.2.3_**
+```{r table3.4.2.3, echo=FALSE}
+u54_labvisit_hccpos_b4enr <- u54_labvisit_hccpos_b4enr %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_lab_type, "Visit date" = visit_lab_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_labvisit)
+kbl(u54_labvisit_hccpos_b4enr, escape = F) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit date entered is prior to Enrollment date.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 6 Months Missing data {-}
+**_Table 3.4.2.4_**
+```{r table3.4.2.4, echo=FALSE}
+u54_labvisit_hccpos_6m_miss <- u54_labvisit_hccpos_6m_miss %>% dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_labvisit_hccpos_6m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 6 Months follow-up data is missing for these subjects. ", footnote_as_chunk = T, title_format = c("italic", "underline")) 
+
+```
+
+#### 6 Months follow-up error {-}
+**_Table 3.4.2.5_**
+```{r table3.4.2.5, echo=FALSE}
+u54_labvisit_hccpos_6 <- u54_labvisit_hccpos %>% 
+                         dplyr::filter(u54_labvisit_hccpos$visit_lab_type == "6 Months" &
+                                       (u54_labvisit_hccpos$datediff_enroll_labvisit < 0 |    
+                                       u54_labvisit_hccpos$datediff_enroll_labvisit > 12)) %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_lab_type, "Visit date" = visit_lab_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_labvisit)
+kbl(u54_labvisit_hccpos_6) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 6 Months: Window for 6 months Follow-up visit is 0-12 months. Subjects whose visit date fall outside this window for a 6 month visit are displayed.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### 12 Months Missing data {-}
+**_Table 3.4.2.6_**
+```{r table3.4.2.6, echo=FALSE}
+u54_labvisit_hccpos_12m_miss <- u54_labvisit_hccpos_12m_miss %>% dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y)
+kbl(u54_labvisit_hccpos_12m_miss) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 12 Months follow-up data is missing for these subjects. ", footnote_as_chunk = T, title_format = c("italic", "underline"))
+```
+
+
+#### 12 Months follow-up error {-}
+**_Table 3.4.2.7_**
+```{r table3.4.2.7, echo=FALSE}
+u54_labvisit_hccpos_12 <- u54_labvisit_hccpos %>% 
+                         dplyr::filter(u54_labvisit_hccpos$visit_lab_type == "12 Months" &
+                                       (u54_labvisit_hccpos$datediff_enroll_labvisit < 6 |    
+                                       u54_labvisit_hccpos$datediff_enroll_labvisit > 18)) %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_lab_type, "Visit date" = visit_lab_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_labvisit)
+kbl(u54_labvisit_hccpos_12) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " 12 Months: Window for 12 months Follow-up visit is 6-18 months. Subjects whose visit date fall outside this window for a 12 month visit are displayed. ", footnote_as_chunk = T, title_format = c("italic", "underline"))
+```
+
+
+#### Non-designated events {-}
+**_Table 3.4.2.8_**
+```{r table3.4.2.8, echo=FALSE}
+u54_labvisit_hccpos_nonevent <- u54_labvisit_hccpos_nonevent %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_lab_type, "Visit date" = visit_lab_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_labvisit)
+kbl(u54_labvisit_hccpos_nonevent) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Date entered in non designated events for this instrument.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+```
+
+
+---
+
+
+<!-- ### **Cohort: HIV+/HCC-**    -->
+### Cohort: HIV+/HCC- {.tabset .tabset-pills}
+> Follow-up events: Baseline
+
++ There are `r u54_labvisit_hccneg_rec` records.
+  + `r nrow(subset(u54_labvisit_hccneg, (visit_lab_type == "Baseline")))` out of `r length(unique(u54_labvisit_hccneg$record_id))` subjects have data for baseline visit.
+
+Tabs:
+
+<!-- + All Follow-up events: All records displayed for all Follow-up events. -->
++ **Missing Visit type/date**: `r nrow(u54_labvisit_hccneg_missviss)` subjects.
++ **Missing Baseline data**: `r nrow(u54_labvisit_hccneg_bl_miss)` subjects.
++ **Visit date error**: `r nrow(u54_labvisit_hccneg_b4enr)` subjects.
++ **Non-designated events**: `r length(unique(u54_labvisit_hccneg_nonevent$record_id))` subjects.
+
+<!-- #### All Follow-up events {-} -->
+<!-- **_Table 3.4.3_** -->
+<!-- ```{r table3.4.3, echo=FALSE} -->
+<!-- kbl(u54_labvisit_hccneg) %>% kable_paper() %>% -->
+<!--   kable_styling(bootstrap_options = "striped", full_width = FALSE) %>% -->
+<!--   scroll_box(width = "100%", height = "500px") -->
+<!-- ``` -->
+
+#### Missing Visit type/date {-}
+**_Table 3.4.3.1_**
+```{r table3.4.3.1, echo=FALSE}
+
+ u54_labvisit_hccneg_missviss <- u54_labvisit_hccneg_missviss %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_lab_type, "Visit date" = visit_lab_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_labvisit)
+kbl(u54_labvisit_hccneg_missviss, escape = F, row.names = FALSE) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit type/date is missing for these subjects. There can be multiple rows per subject due to data missing in more than one instance.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+
+#### Missing Baseline data {-}
+**_Table 3.4.3.2_**
+```{r table3.4.3.2, echo=FALSE}
+
+u54_labvisit_hccneg_bl_miss <- u54_labvisit_hccneg_bl_miss %>%
+                          dplyr::rename("Record ID" = record_id, "U54 SubjectID" = enr_otherid)
+kbl(u54_labvisit_hccneg_bl_miss, escape = F) %>% kable_paper() %>%
+kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Baseline data is missing for these subjects.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+```
+
+#### Visit date error {-}
+**_Table 3.4.3.3_**
+```{r table3.4.3.3, echo=FALSE}
+
+ u54_labvisit_hccneg_b4enr <- u54_labvisit_hccneg_b4enr %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_lab_type, "Visit date" = visit_lab_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_labvisit)
+kbl(u54_labvisit_hccneg_b4enr) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Visit date entered is prior to Enrollment date.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+``` 
+
+#### Non-designated events {-}
+**_Table 3.4.3.4_**
+```{r table3.4.3.4, echo=FALSE}
+u54_labvisit_hccneg_nonevent <- u54_labvisit_hccneg_nonevent %>%
+                          dplyr::rename("Record ID" = record_id, "Enrollment date" = enr_enroll_d, "U54 SubjectID" = enr_otherid, "Has the Patient died?" = final_death_y,  "Cohort" = cohort, "Visit type" = visit_lab_type, "Visit date" = visit_lab_d, "(Enrollment date - Visit date) in Months" = datediff_enroll_labvisit)
+kbl(u54_labvisit_hccneg_nonevent) %>%
+  kable_styling(bootstrap_options = "striped", full_width = FALSE) %>%
+  scroll_box(width = "100%", height = "500px") %>%
+  footnote(general = " Date entered in non designated events for this instrument.", footnote_as_chunk = T, title_format = c("italic", "underline"))
+
+``` 
+
+
+
+<!-- %>% select("Record ID", "U54 SubjectID", "Has the Patient died?", "Cohort", "Enrollment Date", redcap_36_months,"(Enrollment date - redcap_36_months) IN MONTHS") -->
+### {.unlisted .unnumbered}
+
+<br>
+<hr style="height:2px;border-width:0;color:gray;background-color:gray">
+<br>
+
+
+
+<!------------------------------------------------------------------------>
+<!---------------            Missing Data Listing          --------------->
+<!------------------------------------------------------------------------>
+
+# **Missing Data Listing**
+
+Missing/Discrepancies across all forms for the records in both arms.
+
+The fields that belong to "enrollment_arm_1 :: HIV_diagnosis" are not missing values but invalid values for the respective records. Please refer to notes in the appendix at the bottom of this page on how to interpret the invalid values in HIV Diagnosis form
+
+
+```{r all forms}
+wide_agg_missing %>%
+datatable( rownames = FALSE,class = 'cell-border stripe',
+   extensions = c('Buttons','FixedHeader','FixedColumns'),
+  options = list(columnDefs = list(list(className = 'dt-left',targets = '_all' )),
+    pageLength = 500, PageWidth =2000, fixedHeader = TRUE, dom = 'Bfrtip', buttons = c( 'colvis', 'print', 'pdf','copy','excel'), scrollY = TRUE, scrollX =TRUE,  fixedColumns = list(leftColumns = 1, rightColumns = 1)
+   ),escape = FALSE )%>% formatStyle("Form_fields","white-space"="wrap")
+```
+
+
+##**Appendix:
+
+#####**Enrollment Form**
+
+1. Missing fields in Enrollment form - Other ID, site, enrolled date, date of birth, gender, marital status, occupation, education, Is Patient HIV positive, Is Patient HCC positive, all the fields in sections - Risk factors for HCC, Risk Factors for HIV, HCV, and HBV Acquisition, Hepatitis Immunizations and Co-Morbid Medical Conditions, Current alcohol use is 'Yes' and Alcohol duration in years is null
+#####**HIV diagnosis Form**
+
+1. AIDS diagnosis  is Yes and prior OI  is No and/or OI defining illness is either No or Unknown
+
+Note: If Prior OI is Yes or 1 or more OI is Yes then AIDS diagnosis should be Yes. We do not need to pull this but perhaps can change the field so that you cant have no checked for AIDS diagnosis if prior OI yes or an OI checked off
+
+#####**HCC diagnosis Form** is Yes
+
+1. Arterial enhancement is No
+2. BCLC is Missing
+3. Cirrhosis
+4. Steatosis
+5. Ascites
+6. Splenomegaly
+7. Varicies
+8. Portal vein invasion
+9. Portal Vein thrombosis
+
+#####**Visit Form**
+
+1. ECOG performance status is Missing
+2. HIV treatment yes, but missing start date and recent regimen
+3. HBV treatment yes, but missing start date and regimen
+4. missing fibroscan score
+5. missing other imaging results (any text)
+6. Height and Weight missiing
+7. HIV positive and HCC missing any value(i.e., missing both Yes or No)
+8. Jaundice and Encephalopathy missing any value(i.e., missing Yes or No or Unknown)
+
+#####**Laboratory Testing Results Form**
+1. (lab results) # with CD4 and HIV RNA but HIV negative
+2. HBsAg
+3. HBeAg (if HBsAg +)
+4. Anti-HBe (if HBsAg +)
+5. HBV DNA (if HBsAg +)
+6. Anti-HDV (if HBsAg +)
+7. Anti-HCV
+8. CD4 + Cell Count (if HIV +)
+9. HIV RNA (if HIV +)
+10. INR
+11. PT
+12. Creatinine
+13. Hemoglobin
+14. Platelets
+15. ALT
+16. AST
+17. Albumin
+18. Total Bilrubin
+19. Total Protein
+20. AFP
+
+#####**Visit HCC Form**
+
+1. Missing MELD score
+2. Missing CPS
+
+#####**Visit HIV Form**
+
+1. Missing USS findings or USS other completed
+2. CT findings. # missing any response either yes/no or unknown
+
+#####**Outcome Form**
+
+1. With missing death outcome  - has patient died
+2. With missing date of death if patient died is Yes
+3. With missing cause of death if patient died is Yes.
+
+
